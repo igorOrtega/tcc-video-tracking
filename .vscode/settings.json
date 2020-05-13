@@ -1,0 +1,8 @@
+{
+    "python.pythonPath": "C:\\Users\\Igor Ortega\\Documents\\python\\Envs\\ArTracking\\Scripts\\python.exe",
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintArgs" : [
+        "--extension-pkg-whitelist=cv2"
+    ]
+}
