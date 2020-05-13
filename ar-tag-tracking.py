@@ -50,7 +50,7 @@ if __name__ == "__main__":
             #(rvec-tvec).any() # get rid of that nasty numpy value array error
             for i in range(0, ids.size):
                 # draw axis for the aruco markers
-                aruco.drawAxis(frame, cam_mtx, dist, rvec[i], tvec[i], 0.1)
+                aruco.drawAxis(frame, cam_mtx, dist, rvec[i], tvec[i], 5)
 
             # draw a square around the markers
             aruco.drawDetectedMarkers(frame, corners)
