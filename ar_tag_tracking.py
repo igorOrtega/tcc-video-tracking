@@ -1,6 +1,12 @@
+from queue import Queue
+import time
+import socket
+import threading
+import sys
 import numpy as np
 import cv2
 import cv2.aruco as aruco
+
 
 # SAVE_DIR = "camera_calibration_data/"
 # MARKER_LENGHT = 6.3
@@ -12,11 +18,13 @@ class ArTagTrack:
         self.camera_parameters_save_dir = camera_parameters_save_dir
         self.marker_lenght = marker_lenght
 
-    def main_loop(self):
+        self.data_queue = Queue(1)
+
+    def track(self):
         cam_mtx = np.load(self.camera_parameters_save_dir + 'cam_mtx.npy')
         dist = np.load(self.camera_parameters_save_dir + 'dist.npy')
 
-        video = cv2.VideoCapture(0)
+        video = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
         while True:
 
@@ -79,10 +87,24 @@ class ArTagTrack:
                 cv2.putText(frame, "Z: " + z, (0, 128), font,
                             0.6, (0, 255, 0), 2, cv2.LINE_AA)
 
+                if(self.data_queue.full()):
+                    self.clear_queue()
+
+                data = "timestamp:{}|success:1|tx:{:.2f}|ty:{:.2f}|tz:{:.2f}|rx:{:.2f}|ry:{:.2f}|rz:{:.2f}".format(
+                    time.time(), tvec.item(0), tvec.item(1), tvec.item(2), rvec.item(0), rvec.item(1), rvec.item(2))
+
+                self.data_queue.put(data)
+
             else:
                 # code to show 'No Ids' when no markers are found
                 cv2.putText(frame, "No Ids", (0, 32), font,
                             0.6, (0, 255, 0), 2, cv2.LINE_AA)
+
+                if(self.data_queue.full()):
+                    self.clear_queue()
+
+                data = "timestamp:{}|success:0".format(time.time())
+                self.data_queue.put(data)
 
             # display the resulting frame
             cv2.imshow(win_name, frame)
@@ -92,6 +114,39 @@ class ArTagTrack:
         # When everything done, release the capture
         video.release()
         cv2.destroyAllWindows()
+
+    def clear_queue(self):
+        while not self.data_queue.empty():
+            try:
+                self.data_queue.get(False)
+            except:
+                continue
+            self.data_queue.task_done()
+
+    def start_server(self):
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_address = ('localhost', 10000)
+        sock.bind(server_address)
+
+        sock.listen(1)
+
+        while True:
+            # Wait for a connection
+            print('waiting for a connection')
+            connection, _ = sock.accept()
+
+            while True:
+                data = self.data_queue.get()
+                connection.send(data.encode())
+
+    def main_loop(self):
+        server_thread = threading.Thread(target=self.start_server)
+        server_thread.daemon = True
+        server_thread.start()
+
+        self.track()
+        sys.exit()
 
 
 if __name__ == "__main__":
