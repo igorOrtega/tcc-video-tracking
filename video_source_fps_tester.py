@@ -1,5 +1,4 @@
 import time
-import os
 import cv2
 
 
@@ -31,9 +30,6 @@ class FpsTester:
             if(frame_count == 10):
                 current_fps = (frame_count)/(time.time() - start)
                 frame_count = 0
-
-            # os.system('cls' if os.name == 'nt' else "printf '\033c'")
-            # print("FPS: " + str(current_fps))
 
 
 if __name__ == "__main__":
