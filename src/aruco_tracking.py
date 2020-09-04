@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 import cv2.aruco as aruco
 from video_capture_feed import VideoCaptureFeed
+from coordinates_export import CoordinatesExport
 
 
 class ArucoTracking:
@@ -15,6 +16,7 @@ class ArucoTracking:
         self.tracking_config = tracking_config
 
         self.camera_parameters_save_dir = '../assets/camera_calibration_data/'
+        self.export_server = CoordinatesExport(None)
 
     def single_marker_tracking(self, video_source, show_window):
         cam_mtx = np.load(self.camera_parameters_save_dir + 'cam_mtx.npy')
@@ -45,8 +47,7 @@ class ArucoTracking:
                 frame_detection_result = "timestamp:{}|success:0".format(
                     time.time())
 
-            # export
-            print(frame_detection_result)
+            self.export_server.export_data(frame_detection_result)
 
             if show_window:
                 win_name = "Tracking"
