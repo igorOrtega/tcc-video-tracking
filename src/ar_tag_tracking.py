@@ -48,9 +48,7 @@ class ArTagTrack:
             font = cv2.FONT_HERSHEY_SIMPLEX
 
             win_name = "Tracking"
-            cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
-            cv2.setWindowProperty(
-                win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            cv2.namedWindow(win_name)
 
             # check if the ids list is not empty
             # if no check is added the code will crash
