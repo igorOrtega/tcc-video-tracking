@@ -17,8 +17,8 @@ class CameraCalibration:
         self.criteria = (cv2.TERM_CRITERIA_EPS +
                          cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-        self.calibration_images_dir = './calibration_images/'
-        self.camera_parameters_save_dir = './camera_calibration_data/'
+        self.calibration_images_dir = '../assets/calibration_images/'
+        self.camera_parameters_save_dir = '../assets/camera_calibration_data/'
 
         self.calibration_image_count = 0
         self.update_saved_image_count()
@@ -136,16 +136,15 @@ class CameraCalibration:
 
 def save_config(calibration_config_data):
     # Overwrites any existing file.
-    with open('calibration_config_data.pkl', 'wb') as output:
+    with open('../assets/configs/calibration_config_data.pkl', 'wb') as output:
         pickle.dump({
             'chessboard_points_per_row': calibration_config_data.chessboard_points_per_row,
             'chessboard_points_per_column': calibration_config_data.chessboard_points_per_column,
-            'chessboard_square_size': calibration_config_data.chessboard_square_size},
-            output, pickle.HIGHEST_PROTOCOL)
+            'chessboard_square_size': calibration_config_data.chessboard_square_size}, output, pickle.HIGHEST_PROTOCOL)
 
 
 def load_config():
-    with open('calibration_config_data.pkl', 'rb') as file:
+    with open('../assets/configs/calibration_config_data.pkl', 'rb') as file:
         return pickle.load(file)
 
 
