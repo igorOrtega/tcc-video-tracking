@@ -1,24 +1,41 @@
 import os
+from tkinter import *
 import cv2.aruco as aruco
 from tracking import ArucoTracking, ArucoTrackingCofig
 
 
+class Application:
+    def __init__(self, master=None):
+        self.traking_container = Frame(master)
+        self.traking_container["pady"] = 10
+        self.traking_container.pack()
+
+        self.title = Label(self.traking_container, text="AR Tracking - TCC")
+        self.title.pack()
+
+        self.tracking_button = Button(self.traking_container)
+        self.tracking_button["text"] = "Start tracking"
+        self.tracking_button["width"] = 12
+        self.tracking_button["command"] = self.start_tracking
+        self.tracking_button.pack()
+
+    def start_tracking(self):
+        config = ArucoTrackingCofig(
+            2.5, aruco.DICT_6X6_250, 'localhost', 10000)
+        tracking = ArucoTracking(config)
+        tracking.single_marker_tracking(0, True)
+
+
 if __name__ == "__main__":
-    # config1 = CoordinatesExportCofig('localhost', 10000)
+    root = Tk()
 
-    # exporter = CoordinatesExport(config1)
+    WIDTH = 400
+    HEIGHT = 400
 
-    _exit = False
-    while(_exit == False):
-        os.system('cls' if os.name == 'nt' else 'clear')
-        option = input("1 - Run Tracking\n2 - Exit\n\n")
+    # centers window
+    pos_x = (root.winfo_screenwidth()/2) - (WIDTH/2)
+    pos_y = (root.winfo_screenheight()/2) - (HEIGHT/2)
+    root.geometry('%dx%d+%d+%d' % (WIDTH, HEIGHT, pos_x, pos_y))
 
-        if option == "1":
-            config = ArucoTrackingCofig(
-                2.5, aruco.DICT_6X6_250, 'localhost', 10000)
-
-            tracking = ArucoTracking(config)
-
-            tracking.single_marker_tracking(0, True)
-        elif option == "2":
-            _exit = True
+    Application(root)
+    root.mainloop()
