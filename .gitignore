@@ -1,6 +1,10 @@
 # IDE - VSCode
-.vscode/*
-.vscode/settings.json
+**vscode/
+
+.venv/*
+
+**src/__pycache__/
+**video_device_listing/build/
 
 # images
 
