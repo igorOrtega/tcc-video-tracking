@@ -2,11 +2,14 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 import cv2.aruco as aruco
+from calibration import CameraCalibration, CalibrationCofig
 import video_device_listing
 from tracking import ArucoTracking, ArucoTrackingCofig
 
 
 class App():
+
+        
     def __init__(self, window=None):
         self.set_window_size(window, 600, 300)
         self.create_widgets(window)
@@ -23,13 +26,16 @@ class App():
         tracking.single_marker_tracking(
             self.webcam_selection.current(), self.show_video.get())
 
-# _-----------------------------------------------
-    def Calibrate(self):
-        return 0
 
-    def Capture(self):
-        return 0
-# -----------------------------------------------
+    def Calibrate(self, calibration_config):
+        cam_calib = CameraCalibration(calibration_config)
+        cam_calib.run_calibration()
+        return "calibrou"
+        
+    def Capture(self, calibration_config, video_source):
+        cam_capture = CameraCalibration(calibration_config)
+        cam_capture.acquire_calibration_images(video_source)
+        return "tirou foto"
 
     def create_widgets(self, window):
         # Create some room around all the internal frames
@@ -123,15 +129,17 @@ class App():
         calib_img_count = ttk.Label(
             calib_config_frame, text="Calibration image count:")
         calib_img_count.grid(row=8, column=1, rowspan=3,  sticky=tk.W)
+        
+        cam = CameraCalibration(CalibrationCofig)
+        img_count = ttk.Label(calib_config_frame, text = cam.calibration_image_count)
+        img_count.grid(row = 8, column = 2)
 
-        # aqui
         calibrate_b = tk.Button(calib_config_frame, text="Calibrate")
-        calibrate_b['command'] = self.Calibrate
+        calibrate_b['command'] = lambda: self.Calibrate(CalibrationCofig)
         calibrate_b.grid(row=11, column=1)
 
-        # aqui 2
         capture_img_b = tk.Button(calib_config_frame, text="Capture Images")
-        capture_img_b['command'] = self.Capture
+        capture_img_b['command'] = lambda: self.Capture(CalibrationCofig, self.webcam_selection.get())
         capture_img_b.grid(row=12, column=1)
 
         menubar = tk.Menu(window)
