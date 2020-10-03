@@ -57,10 +57,10 @@ class App():
             self.webcam_selection.current(), self.show_video.get())
         start_tracking_button.grid(row=1, column=2)
 
-        stop_tracking_button = tk.Button(
-            tracking_frame, text="Stop Tracking")
-        # stop_tracking_button['command'] = lambda: self.tracking.stop_eve()
-        stop_tracking_button.grid(row=1, column=2)
+        # stop_tracking_button = tk.Button(
+        #     tracking_frame, text="Stop Tracking")
+        # # stop_tracking_button['command'] = lambda: self.tracking.stop_eve()
+        # stop_tracking_button.grid(row=1, column=2)
 
         webcam_selection_label = tk.Label(tracking_frame, text="Video Source")
         webcam_selection_label.grid(row=2, column=1, sticky=tk.W + tk.N)
