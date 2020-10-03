@@ -1,10 +1,10 @@
-# IDE - VSCode
+	# IDE - VSCode
 **vscode/
 
 .venv/*
 
-**src/__pycache__/
-**video_device_listing/build/
+src/__pycache__/
+video_device_listing/build/
 
 # images
 
