@@ -3,7 +3,7 @@ try:
 except ModuleNotFoundError:
     import pickle
 
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Event
 import time
 import numpy as np
 import cv2
@@ -11,23 +11,23 @@ import cv2.aruco as aruco
 from socket_server import DataPublishServer
 
 
-class ArucoTracking:
+class SingleMarkerTracking:
     def __init__(self, tracking_config):
-        self.tracking_config = tracking_config
-        self.camera_parameters_save_dir = '../assets/camera_calibration_data/'
-        self.data_queue = Queue(1)
+        self.__tracking_config = tracking_config
+        self.__camera_parameters_save_dir = '../assets/camera_calibration_data/'
+        self.__data_queue = Queue(1)
 
         data_publish_server = DataPublishServer(
-            self.tracking_config.server_address, self.tracking_config.server_port)
+            self.__tracking_config.server_address, self.__tracking_config.server_port)
 
-        self.data_publish_server_process = Process(
-            target=data_publish_server.start, args=((self.data_queue),))
+        self.__data_publish_server_process = Process(
+            target=data_publish_server.start, args=((self.__data_queue),))
 
     def single_marker_tracking(self, video_source, show_window):
-        self.data_publish_server_process.start()
+        self.__data_publish_server_process.start()
 
-        cam_mtx = np.load(self.camera_parameters_save_dir + 'cam_mtx.npy')
-        dist = np.load(self.camera_parameters_save_dir + 'dist.npy')
+        cam_mtx = np.load(self.__camera_parameters_save_dir + 'cam_mtx.npy')
+        dist = np.load(self.__camera_parameters_save_dir + 'dist.npy')
 
         video_capture = cv2.VideoCapture(video_source, cv2.CAP_DSHOW)
 
@@ -39,13 +39,13 @@ class ArucoTracking:
 
             corners, ids, _ = aruco.detectMarkers(
                 cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
-                aruco.Dictionary_get(self.tracking_config.selected_marker),
+                aruco.Dictionary_get(self.__tracking_config.selected_marker),
                 parameters=parameters)
 
             frame_detection_result = None
             if np.all(ids is not None):
                 rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
-                    corners, self.tracking_config.marker_lenght, cam_mtx, dist)
+                    corners, self.__tracking_config.marker_lenght, cam_mtx, dist)
 
                 frame_detection_result = "timestamp:{}|success:1|tx:{:.2f}|ty:{:.2f}|tz:{:.2f}|rx:{:.2f}|ry:{:.2f}|rz:{:.2f}".format(
                     time.time(), tvec.item(0), tvec.item(1), tvec.item(2), rvec.item(0), rvec.item(1), rvec.item(2))
@@ -54,7 +54,7 @@ class ArucoTracking:
                 frame_detection_result = "timestamp:{}|success:0".format(
                     time.time())
 
-            self.publish_coordinates(
+            self.__publish_coordinates(
                 frame_detection_result)
 
             if show_window:
@@ -71,18 +71,18 @@ class ArucoTracking:
 
                 cv2.imshow(win_name, frame)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if (cv2.waitKey(1) & 0xFF == ord('q')) | self.stop_event.wait(0):
                 break
 
         video_capture.release()
         cv2.destroyAllWindows()
-        self.data_publish_server_process.terminate()
+        self.__data_publish_server_process.terminate()
 
-    def publish_coordinates(self, data):
-        if self.data_queue.full():
-            self.data_queue.get()
+    def __publish_coordinates(self, data):
+        if self.__data_queue.full():
+            self.__data_queue.get()
 
-        self.data_queue.put(data)
+        self.__data_queue.put(data)
 
 
 def save_config(tracking_config_data):
@@ -100,7 +100,7 @@ def load_config():
         return pickle.load(file)
 
 
-class ArucoTrackingCofig:
+class SingleMarkerTrackingCofig:
 
     def __init__(self, marker_lenght, selected_marker, server_address, server_port):
         self.marker_lenght = marker_lenght

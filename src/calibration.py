@@ -7,7 +7,6 @@ import os
 import glob
 import cv2
 import numpy as np
-from video_capture_feed import VideoCaptureFeed
 
 
 class CameraCalibration:
@@ -29,10 +28,10 @@ class CameraCalibration:
         cv2.setWindowProperty(
             win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-        video_capture = VideoCaptureFeed(video_source)
+        video_capture = cv2.VideoCapture(video_source, cv2.CAP_DSHOW)
 
         while True:
-            _, frame = video_capture.next_frame()
+            _, frame = video_capture.read()
 
             font = cv2.FONT_HERSHEY_SIMPLEX
             cv2.putText(frame, "calibration image count: {}".format(
@@ -55,7 +54,7 @@ class CameraCalibration:
                 self.delete_images()
 
             elif key == ord('q'):
-                video_capture.release_camera()
+                video_capture.release()
                 cv2.destroyAllWindows()
                 break
 
