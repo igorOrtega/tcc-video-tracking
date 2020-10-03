@@ -71,7 +71,7 @@ class SingleMarkerTracking:
 
                 cv2.imshow(win_name, frame)
 
-            if (cv2.waitKey(1) & 0xFF == ord('q')) | self.stop_event.wait(0):
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
         video_capture.release()
