@@ -63,8 +63,8 @@ class CameraCalibration:
 
         # only saves images with chessboard
         found, _ = cv2.findChessboardCorners(
-            gray, (self.calibration_config.chessboard_points_per_row,
-                   self.calibration_config.chessboard_points_per_column), None)
+            gray, (self.calibration_config.chessboard_row_count,
+                   self.calibration_config.chessboard_col_count), None)
 
         if found:
             self.calibration_image_count = self.calibration_image_count + 1
@@ -92,11 +92,11 @@ class CameraCalibration:
 
             return
 
-        objp = np.zeros((self.calibration_config.chessboard_points_per_row *
-                         self.calibration_config.chessboard_points_per_column, 3), np.float32)
+        objp = np.zeros((self.calibration_config.chessboard_row_count *
+                         self.calibration_config.chessboard_col_count, 3), np.float32)
 
-        objp[:, :2] = np.mgrid[0:self.calibration_config.chessboard_points_per_row,
-                               0: self.calibration_config.chessboard_points_per_column].T.reshape(-1, 2)*self.calibration_config.chessboard_square_size
+        objp[:, :2] = np.mgrid[0:self.calibration_config.chessboard_row_count,
+                               0: self.calibration_config.chessboard_col_count].T.reshape(-1, 2)*self.calibration_config.chessboard_square_size
 
         objpoints = []
         imgpoints = []
@@ -106,8 +106,8 @@ class CameraCalibration:
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             found, corners = cv2.findChessboardCorners(
-                gray, (self.calibration_config.chessboard_points_per_row,
-                       self.calibration_config.chessboard_points_per_column), None)
+                gray, (self.calibration_config.chessboard_row_count,
+                       self.calibration_config.chessboard_col_count), None)
             if found:
                 objpoints.append(objp)
                 corners2 = cv2.cornerSubPix(
@@ -133,30 +133,31 @@ class CameraCalibration:
         print(">==> Calibration ended")
 
 
-def save_config(calibration_config_data):
-    # Overwrites any existing file.
-    with open('../assets/configs/calibration_config_data.pkl', 'wb') as output:
-        pickle.dump({
-            'chessboard_points_per_row': calibration_config_data.chessboard_points_per_row,
-            'chessboard_points_per_column': calibration_config_data.chessboard_points_per_column,
-            'chessboard_square_size': calibration_config_data.chessboard_square_size}, output, pickle.HIGHEST_PROTOCOL)
+class CalibrationConfig:
 
-
-def load_config():
-    with open('../assets/configs/calibration_config_data.pkl', 'rb') as file:
-        return pickle.load(file)
-
-
-class CalibrationCofig:
-
-    def __init__(self, chessboard_points_per_row, chessboard_points_per_column, chessboard_square_size):
-        self.chessboard_points_per_row = chessboard_points_per_row
-        self.chessboard_points_per_column = chessboard_points_per_column
+    def __init__(self, chessboard_square_size, chessboard_row_count, chessboard_col_count):
         self.chessboard_square_size = chessboard_square_size
+        self.chessboard_row_count = chessboard_row_count
+        self.chessboard_col_count = chessboard_col_count
 
     @classmethod
     def persisted(cls):
-        calibration_config_data = load_config()
-        return cls(calibration_config_data['chessboard_points_per_row'],
-                   calibration_config_data['chessboard_points_per_column'],
-                   calibration_config_data['chessboard_square_size'])
+        if not os.path.exists('../assets/configs/'):
+            os.makedirs('../assets/configs/')
+
+        try:
+            with open('../assets/configs/calibration_config_data.pkl', 'rb') as file:
+                calibration_config_data = pickle.load(file)
+                return cls(calibration_config_data['chessboard_square_size'],
+                           calibration_config_data['chessboard_row_count'],
+                           calibration_config_data['chessboard_col_count'])
+        except FileNotFoundError:
+            return cls("", "", "")
+
+    def persist(self):
+        # Overwrites any existing file.
+        with open('../assets/configs/calibration_config_data.pkl', 'wb+') as output:
+            pickle.dump({
+                'chessboard_square_size': self.chessboard_square_size,
+                'chessboard_row_count': self.chessboard_row_count,
+                'chessboard_col_count': self.chessboard_col_count}, output, pickle.HIGHEST_PROTOCOL)

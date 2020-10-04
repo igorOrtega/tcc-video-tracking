@@ -3,7 +3,8 @@ try:
 except ModuleNotFoundError:
     import pickle
 
-from multiprocessing import Process, Queue, Event
+import os
+from multiprocessing import Process, Queue
 import time
 import numpy as np
 import cv2
@@ -18,12 +19,12 @@ class SingleMarkerTracking:
         self.__data_queue = Queue(1)
 
         data_publish_server = DataPublishServer(
-            self.__tracking_config.server_address, self.__tracking_config.server_port)
+            self.__tracking_config.server_ip, int(self.__tracking_config.server_port))
 
         self.__data_publish_server_process = Process(
             target=data_publish_server.start, args=((self.__data_queue),))
 
-    def single_marker_tracking(self, video_source, show_window):
+    def single_marker_tracking(self, video_source):
         self.__data_publish_server_process.start()
 
         cam_mtx = np.load(self.__camera_parameters_save_dir + 'cam_mtx.npy')
@@ -45,7 +46,7 @@ class SingleMarkerTracking:
             frame_detection_result = None
             if np.all(ids is not None):
                 rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
-                    corners, self.__tracking_config.marker_lenght, cam_mtx, dist)
+                    corners, float(self.__tracking_config.marker_lenght), cam_mtx, dist)
 
                 frame_detection_result = "timestamp:{}|success:1|tx:{:.2f}|ty:{:.2f}|tz:{:.2f}|rx:{:.2f}|ry:{:.2f}|rz:{:.2f}".format(
                     time.time(), tvec.item(0), tvec.item(1), tvec.item(2), rvec.item(0), rvec.item(1), rvec.item(2))
@@ -57,7 +58,7 @@ class SingleMarkerTracking:
             self.__publish_coordinates(
                 frame_detection_result)
 
-            if show_window:
+            if self.__tracking_config.show_video:
                 win_name = "Tracking"
                 cv2.namedWindow(win_name)
 
@@ -85,33 +86,38 @@ class SingleMarkerTracking:
         self.__data_queue.put(data)
 
 
-def save_config(tracking_config_data):
-    # Overwrites any existing file.
-    with open('../assets/configs/tracking_config_data.pkl', 'wb') as output:
-        pickle.dump({
-            'marker_lenght': tracking_config_data.marker_lenght,
-            'selected_marker': tracking_config_data.selected_marker,
-            'server_address': tracking_config_data.server_address,
-            'server_port': tracking_config_data.server_port}, output, pickle.HIGHEST_PROTOCOL)
-
-
-def load_config():
-    with open('../assets/configs/tracking_config_data.pkl', 'rb') as file:
-        return pickle.load(file)
-
-
 class SingleMarkerTrackingCofig:
 
-    def __init__(self, marker_lenght, selected_marker, server_address, server_port):
+    def __init__(self, show_video, marker_lenght, selected_marker, server_ip, server_port):
+        self.show_video = show_video
         self.marker_lenght = marker_lenght
         self.selected_marker = selected_marker
-        self.server_address = server_address
+        self.server_ip = server_ip
         self.server_port = server_port
 
     @classmethod
     def persisted(cls):
-        tracking_config_data = load_config()
-        return cls(tracking_config_data['marker_lenght'],
-                   tracking_config_data['selected_marker'],
-                   tracking_config_data['server_address'],
-                   tracking_config_data['server_port'])
+        if not os.path.exists('../assets/configs/'):
+            os.makedirs('../assets/configs/')
+
+        try:
+            with open('../assets/configs/tracking_config_data.pkl', 'rb') as file:
+                tracking_config_data = pickle.load(file)
+
+                return cls(tracking_config_data['show_video'],
+                           tracking_config_data['marker_lenght'],
+                           tracking_config_data['selected_marker'],
+                           tracking_config_data['server_ip'],
+                           tracking_config_data['server_port'])
+        except FileNotFoundError:
+            return cls(True, "", "", "", "")
+
+    def persist(self):
+        # Overwrites any existing file.
+        with open('../assets/configs/tracking_config_data.pkl', 'wb+') as output:
+            pickle.dump({
+                'show_video': self.show_video,
+                'marker_lenght': self.marker_lenght,
+                'selected_marker': self.selected_marker,
+                'server_ip': self.server_ip,
+                'server_port': self.server_port}, output, pickle.HIGHEST_PROTOCOL)

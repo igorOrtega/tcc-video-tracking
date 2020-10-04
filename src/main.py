@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 import cv2.aruco as aruco
-from calibration import CameraCalibration, CalibrationCofig
+from calibration import CameraCalibration, CalibrationConfig
 import video_device_listing
 from tracking import SingleMarkerTracking, SingleMarkerTrackingCofig
 
@@ -59,23 +59,28 @@ class App():
         self.tracking_config_frame.grid_rowconfigure(2, weight=1)
         self.tracking_config_frame.grid_rowconfigure(3, weight=1)
 
+        self.tracking_config = SingleMarkerTrackingCofig.persisted()
+
         self.show_video_frame = tk.Frame(self.tracking_config_frame)
         self.show_video_frame.grid(row=1, column=1)
         self.show_video = tk.BooleanVar()
-        self.show_video.set(True)
+        self.show_video.set(self.tracking_config.show_video)
         self.show_video_checkbox = tk.Checkbutton(
             self.show_video_frame, text="Show video", variable=self.show_video)
         self.show_video_checkbox.grid(row=1, column=1, pady=5)
 
         self.marker_parameters_frame = tk.Frame(self.tracking_config_frame)
         self.marker_parameters_frame.grid(row=2, column=1, pady=5)
-        self.marker_side_lenght_label = ttk.Label(
+
+        self.marker_lenght = tk.StringVar()
+        self.marker_lenght.set(self.tracking_config.marker_lenght)
+        self.marker_lenght_label = ttk.Label(
             self.marker_parameters_frame, text="Marker side lenght (cm):")
-        self.marker_side_lenght_label.grid(
+        self.marker_lenght_label.grid(
             row=1, column=1, sticky=tk.W + tk.N)
-        self.marker_side_lenght = ttk.Entry(
-            self.marker_parameters_frame, width=10)
-        self.marker_side_lenght.grid(row=1, column=2, sticky=tk.W)
+        self.marker_lenght_entry = ttk.Entry(
+            self.marker_parameters_frame, textvariable=self.marker_lenght, width=10)
+        self.marker_lenght_entry.grid(row=1, column=2, sticky=tk.W)
 
         self.export_coordinates_frame = ttk.LabelFrame(
             self.tracking_config_frame, text="Coordinates Publish Server")
@@ -86,21 +91,23 @@ class App():
         self.export_coordinates_input_frame.grid(
             row=1, column=1, padx=5, pady=5)
 
-        self.export_ip_label = ttk.Label(
+        self.server_ip = tk.StringVar()
+        self.server_ip.set(self.tracking_config.server_ip)
+        self.server_ip_label = ttk.Label(
             self.export_coordinates_input_frame, text="IP Address:")
-        self.export_ip_label.grid(row=1, column=1)
+        self.server_ip_label.grid(row=1, column=1)
+        self.server_ip_entry = ttk.Entry(
+            self.export_coordinates_input_frame, textvariable=self.server_ip, width=15)
+        self.server_ip_entry.grid(row=1, column=2)
 
-        self.export_ip = ttk.Entry(
-            self.export_coordinates_input_frame, width=15)
-        self.export_ip.grid(row=1, column=2)
-
-        self.export_port_label = ttk.Label(
+        self.server_port = tk.StringVar()
+        self.server_port.set(self.tracking_config.server_port)
+        self.server_port_label = ttk.Label(
             self.export_coordinates_input_frame, text="Port:")
-        self.export_port_label.grid(row=1, column=3)
-
-        self.export_port = ttk.Entry(
-            self.export_coordinates_input_frame, width=7)
-        self.export_port.grid(row=1, column=4)
+        self.server_port_label.grid(row=1, column=3)
+        self.server_port_entry = ttk.Entry(
+            self.export_coordinates_input_frame, textvariable=self.server_port, width=7)
+        self.server_port_entry.grid(row=1, column=4)
 
         self.video_source_frame = ttk.LabelFrame(
             self.configuration_frame, text="Video Source")
@@ -159,36 +166,47 @@ class App():
         self.calibration_chessboard_parameters_frame.grid(
             row=3, column=1, pady=5)
 
-        self.calibration_chessboard_square_size_label = ttk.Label(
+        self.calibration_config = CalibrationConfig.persisted()
+
+        self.chessboard_square_size = tk.StringVar()
+        self.chessboard_square_size.set(
+            self.calibration_config.chessboard_square_size)
+        self.chessboard_square_size_label = ttk.Label(
             self.calibration_chessboard_parameters_frame, text="Chessboard square size (cm):")
-        self.calibration_chessboard_square_size_label.grid(
+        self.chessboard_square_size_label.grid(
             row=1, column=1)
+        self.chessboard_square_size_entry = ttk.Entry(
+            self.calibration_chessboard_parameters_frame, width=5,
+            textvariable=self.chessboard_square_size)
+        self.chessboard_square_size_entry.grid(row=1, column=2)
 
-        self.calibration_chessboard_square_size = ttk.Entry(
-            self.calibration_chessboard_parameters_frame, width=5)
-        self.calibration_chessboard_square_size.grid(row=1, column=2)
-
-        self.calibration_chessboard_rows_label = ttk.Label(
+        self.chessboard_row_count = tk.StringVar()
+        self.chessboard_row_count.set(
+            self.calibration_config.chessboard_row_count)
+        self.chessboard_row_count_label = ttk.Label(
             self.calibration_chessboard_parameters_frame, text="Chessboard row count:")
-        self.calibration_chessboard_rows_label.grid(row=2, column=1)
+        self.chessboard_row_count_label.grid(row=2, column=1)
+        self.chessboard_row_count_entry = ttk.Entry(
+            self.calibration_chessboard_parameters_frame, width=5,
+            textvariable=self.chessboard_row_count)
+        self.chessboard_row_count_entry.grid(row=2, column=2)
 
-        self.calibration_chessboard_rows = ttk.Entry(
-            self.calibration_chessboard_parameters_frame, width=5)
-        self.calibration_chessboard_rows.grid(row=2, column=2)
-
-        self.calibration_chessboard_cols_label = ttk.Label(
+        self.chessboard_col_count = tk.StringVar()
+        self.chessboard_col_count.set(
+            self.calibration_config.chessboard_col_count)
+        self.chessboard_col_count_label = ttk.Label(
             self.calibration_chessboard_parameters_frame, text="Chessboard column count:")
-        self.calibration_chessboard_cols_label.grid(row=3, column=1)
-
-        self.calibration_chessboard_cols = ttk.Entry(
-            self.calibration_chessboard_parameters_frame, width=5)
-        self.calibration_chessboard_cols.grid(row=3, column=2)
+        self.chessboard_col_count_label.grid(row=3, column=1)
+        self.chessboard_col_count_entry = ttk.Entry(
+            self.calibration_chessboard_parameters_frame, width=5,
+            textvariable=self.chessboard_col_count)
+        self.chessboard_col_count_entry.grid(row=3, column=2)
 
         self.utils_frame = tk.Frame(window)
         self.utils_frame.grid(row=3, column=1, sticky=tk.S)
 
         self.save_button = ttk.Button(
-            self.utils_frame, text="Save")
+            self.utils_frame, text="Save", command=self.save)
         self.save_button.grid(row=1, column=1, padx=5)
 
         self.quit_button = ttk.Button(
@@ -196,13 +214,13 @@ class App():
         self.quit_button.grid(row=1, column=2, padx=5)
 
     # def Calibrate(self):
-    #     config = CalibrationCofig(5, 10, 2.5)
+    #     config = CalibrationConfig(5, 10, 2.5)
     #     cam_calib = CameraCalibration(config)
     #     cam_calib.run_calibration()
     #     return "calibrou"
 
     # def Capture(self):
-    #     config = CalibrationCofig(5, 10, 2.5)
+    #     config = CalibrationConfig(5, 10, 2.5)
     #     cam_capture = CameraCalibration(config)
     #     cam_capture.acquire_calibration_images(self.webcam_selection.current())
     #     return "tirou foto"
@@ -210,6 +228,18 @@ class App():
     def refresh_video_sources(self):
         self.video_source_list = video_device_listing.get_devices()
         self.video_source['values'] = self.video_source_list
+
+    def save(self):
+        self.tracking_config.show_video = self.show_video.get()
+        self.tracking_config.marker_lenght = self.marker_lenght.get()
+        self.tracking_config.server_ip = self.server_ip.get()
+        self.tracking_config.server_port = self.server_port.get()
+        self.tracking_config.persist()
+
+        self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
+        self.calibration_config.chessboard_row_count = self.chessboard_row_count.get()
+        self.calibration_config.chessboard_col_count = self.chessboard_col_count.get()
+        self.calibration_config.persist()
 
 
 if __name__ == "__main__":
