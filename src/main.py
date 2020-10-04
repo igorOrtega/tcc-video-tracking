@@ -17,7 +17,7 @@ class App():
         window.title("AR Tracking Interface")
 
         width = 600
-        height = 300
+        height = 350
         pos_x = (window.winfo_screenwidth()/2) - (width/2)
         pos_y = (window.winfo_screenheight()/2) - (height/2)
         window.geometry('%dx%d+%d+%d' % (width, height, pos_x, pos_y))
@@ -33,27 +33,8 @@ class App():
         window.grid_rowconfigure(4, weight=1)
         window.grid_columnconfigure(1, weight=1)
 
-        self.video_source_frame = tk.Frame(window)
-        self.video_source_frame.grid(row=1, column=1)
-
-        self.video_source_label = tk.Label(
-            self.video_source_frame, text="Video Source")
-        self.video_source_label.grid(row=1, column=1)
-
-        self.video_source_list = video_device_listing.get_devices()
-        self.video_source = ttk.Combobox(
-            self.video_source_frame, state="readonly", height=4, width=25)
-        self.video_source.grid(row=1, column=2)
-        self.video_source['values'] = self.video_source_list
-        self.video_source.current(0)
-
-        self.refresh_video_sources_button = tk.Button(
-            self.video_source_frame, text="Refresh")
-        self.refresh_video_sources_button['command'] = self.refresh_video_sources
-        self.refresh_video_sources_button.grid(row=1, column=3, padx=5)
-
         self.tracking_commands_frame = tk.Frame(window)
-        self.tracking_commands_frame.grid(row=2, column=1)
+        self.tracking_commands_frame.grid(row=1, column=1)
 
         self.start_tracking_button = tk.Button(
             self.tracking_commands_frame, text="Start Tracking")
@@ -63,7 +44,7 @@ class App():
 
         self.configuration_frame = tk.Frame(window)
         self.configuration_frame.grid(
-            row=3, column=1, sticky=tk.E + tk.W + tk.N + tk.S)
+            row=2, column=1, sticky=tk.E + tk.W + tk.N + tk.S)
 
         self.configuration_frame.grid_columnconfigure(1, weight=1)
         self.configuration_frame.grid_columnconfigure(2, weight=1)
@@ -74,6 +55,9 @@ class App():
             row=1, column=1, sticky=tk.E + tk.W + tk.N + tk.S, pady=5, padx=5)
 
         self.tracking_config_frame.grid_columnconfigure(1, weight=1)
+        self.tracking_config_frame.grid_rowconfigure(1, weight=1)
+        self.tracking_config_frame.grid_rowconfigure(2, weight=1)
+        self.tracking_config_frame.grid_rowconfigure(3, weight=1)
 
         self.show_video_frame = tk.Frame(self.tracking_config_frame)
         self.show_video_frame.grid(row=1, column=1)
@@ -97,46 +81,81 @@ class App():
             self.tracking_config_frame, text="Coordinates Publish Server")
         self.export_coordinates_frame.grid(row=3, column=1, pady=5)
 
+        self.export_coordinates_input_frame = tk.Frame(
+            self.export_coordinates_frame)
+        self.export_coordinates_input_frame.grid(
+            row=1, column=1, padx=5, pady=5)
+
         self.export_ip_label = ttk.Label(
-            self.export_coordinates_frame, text="IP Address:")
+            self.export_coordinates_input_frame, text="IP Address:")
         self.export_ip_label.grid(row=1, column=1)
 
-        self.export_ip = ttk.Entry(self.export_coordinates_frame, width=15)
+        self.export_ip = ttk.Entry(
+            self.export_coordinates_input_frame, width=15)
         self.export_ip.grid(row=1, column=2)
 
         self.export_port_label = ttk.Label(
-            self.export_coordinates_frame, text="Port:")
+            self.export_coordinates_input_frame, text="Port:")
         self.export_port_label.grid(row=1, column=3)
 
-        self.export_port = ttk.Entry(self.export_coordinates_frame, width=7)
+        self.export_port = ttk.Entry(
+            self.export_coordinates_input_frame, width=7)
         self.export_port.grid(row=1, column=4)
 
-        self.calibration_config_frame = ttk.LabelFrame(
-            self.configuration_frame, text="Calibration")
-        self.calibration_config_frame.grid(
+        self.video_source_frame = ttk.LabelFrame(
+            self.configuration_frame, text="Video Source")
+        self.video_source_frame.grid(
             row=1, column=2, sticky=tk.E + tk.W + tk.N + tk.S, pady=5, padx=5)
+        self.video_source_frame.grid_columnconfigure(1, weight=1)
 
-        self.calibration_config_frame.grid_columnconfigure(1, weight=1)
+        self.video_source_selection_frame = tk.Frame(self.video_source_frame)
+        self.video_source_selection_frame.grid(row=1, column=1)
 
-        self.calibration_frame = tk.Frame(self.calibration_config_frame)
-        self.calibration_frame.grid(row=1, column=1)
+        self.video_source_list = video_device_listing.get_devices()
+        self.video_source = ttk.Combobox(
+            self.video_source_selection_frame, state="readonly", height=4, width=25)
+        self.video_source.grid(row=1, column=1)
+        self.video_source['values'] = self.video_source_list
+        self.video_source.current(0)
+
+        self.refresh_video_sources_button = tk.Button(
+            self.video_source_selection_frame, text="Refresh")
+        self.refresh_video_sources_button['command'] = self.refresh_video_sources
+        self.refresh_video_sources_button.grid(row=1, column=3, padx=5)
+
+        self.calibration_status_frame = tk.Frame(self.video_source_frame)
+        self.calibration_status_frame.grid(row=2, column=1)
+        self.calibration_status_label = ttk.Label(
+            self.calibration_status_frame, text="Status:")
+        self.calibration_status_label.grid(row=1, column=1)
+        self.calibration_status = ttk.Label(
+            self.calibration_status_frame, text="Not calibrated!", foreground="red")
+        self.calibration_status.grid(row=1, column=2)
+
+        self.calibration_frame = ttk.LabelFrame(
+            self.video_source_frame, text="Calibration")
+        self.calibration_frame.grid(
+            row=3, column=1, sticky=tk.E + tk.W + tk.N + tk.S, pady=5, padx=5)
+        self.calibration_frame.grid_columnconfigure(1, weight=1)
+
+        self.calibration_buttons_frame = tk.Frame(self.calibration_frame)
+        self.calibration_buttons_frame.grid(row=1, column=1, pady=5)
+
         self.calibrate_button = tk.Button(
-            self.calibration_frame, text="Calibrate")
+            self.calibration_buttons_frame, text="Calibrate", state=tk.DISABLED)
         # self.calibrate_button['command'] = lambda: self.Calibrate()
         self.calibrate_button.grid(row=1, column=1, padx=5)
         self.capture_images_button = tk.Button(
-            self.calibration_frame, text="Capture Images")
+            self.calibration_buttons_frame, text="Capture Images")
         # self.capture_images_button['command'] = lambda: self.Capture()
         self.capture_images_button.grid(row=1, column=2, padx=5)
 
-        self.calibration_image_count_text = tk.StringVar()
-        self.calibration_image_count_text.set('Calibration images count: 0')
         self.calibration_image_count_label = ttk.Label(
-            self.calibration_config_frame, textvariable=self.calibration_image_count_text)
+            self.calibration_frame, text="Calibration images count: 0\nMinimum: 30", foreground="red")
         self.calibration_image_count_label.grid(row=2, column=1)
 
         self.calibration_chessboard_parameters_frame = tk.Frame(
-            self.calibration_config_frame)
+            self.calibration_frame)
         self.calibration_chessboard_parameters_frame.grid(
             row=3, column=1, pady=5)
 
@@ -166,7 +185,7 @@ class App():
         self.calibration_chessboard_cols.grid(row=3, column=2)
 
         self.utils_frame = tk.Frame(window)
-        self.utils_frame.grid(row=4, column=1, sticky=tk.S)
+        self.utils_frame.grid(row=3, column=1, sticky=tk.S)
 
         self.save_button = ttk.Button(
             self.utils_frame, text="Save")
