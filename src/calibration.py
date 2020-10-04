@@ -62,9 +62,7 @@ class CameraCalibration:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # only saves images with chessboard
-        found, _ = cv2.findChessboardCorners(
-            gray, (self.calibration_config.chessboard_row_count,
-                   self.calibration_config.chessboard_col_count), None)
+        found, _ = cv2.findChessboardCorners(gray, (9, 6), None)
 
         if found:
             self.calibration_image_count = self.calibration_image_count + 1
@@ -92,11 +90,9 @@ class CameraCalibration:
 
             return
 
-        objp = np.zeros((self.calibration_config.chessboard_row_count *
-                         self.calibration_config.chessboard_col_count, 3), np.float32)
-
-        objp[:, :2] = np.mgrid[0:self.calibration_config.chessboard_row_count,
-                               0: self.calibration_config.chessboard_col_count].T.reshape(-1, 2)*self.calibration_config.chessboard_square_size
+        objp = np.zeros((9 * 6, 3), np.float32)
+        objp[:, :2] = np.mgrid[0:9,
+                               0:6].T.reshape(-1, 2)*self.calibration_config.chessboard_square_size
 
         objpoints = []
         imgpoints = []
@@ -105,9 +101,7 @@ class CameraCalibration:
             frame = cv2.imread(image_path)
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            found, corners = cv2.findChessboardCorners(
-                gray, (self.calibration_config.chessboard_row_count,
-                       self.calibration_config.chessboard_col_count), None)
+            found, corners = cv2.findChessboardCorners(gray, (9, 6), None)
             if found:
                 objpoints.append(objp)
                 corners2 = cv2.cornerSubPix(
@@ -135,10 +129,8 @@ class CameraCalibration:
 
 class CalibrationConfig:
 
-    def __init__(self, chessboard_square_size, chessboard_row_count, chessboard_col_count):
+    def __init__(self, chessboard_square_size):
         self.chessboard_square_size = chessboard_square_size
-        self.chessboard_row_count = chessboard_row_count
-        self.chessboard_col_count = chessboard_col_count
 
     @classmethod
     def persisted(cls):
@@ -148,16 +140,12 @@ class CalibrationConfig:
         try:
             with open('../assets/configs/calibration_config_data.pkl', 'rb') as file:
                 calibration_config_data = pickle.load(file)
-                return cls(calibration_config_data['chessboard_square_size'],
-                           calibration_config_data['chessboard_row_count'],
-                           calibration_config_data['chessboard_col_count'])
+                return cls(calibration_config_data['chessboard_square_size'])
         except FileNotFoundError:
-            return cls("", "", "")
+            return cls("")
 
     def persist(self):
         # Overwrites any existing file.
         with open('../assets/configs/calibration_config_data.pkl', 'wb+') as output:
             pickle.dump({
-                'chessboard_square_size': self.chessboard_square_size,
-                'chessboard_row_count': self.chessboard_row_count,
-                'chessboard_col_count': self.chessboard_col_count}, output, pickle.HIGHEST_PROTOCOL)
+                'chessboard_square_size': self.chessboard_square_size}, output, pickle.HIGHEST_PROTOCOL)

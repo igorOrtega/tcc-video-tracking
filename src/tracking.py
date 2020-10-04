@@ -40,7 +40,7 @@ class SingleMarkerTracking:
 
             corners, ids, _ = aruco.detectMarkers(
                 cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
-                aruco.Dictionary_get(self.__tracking_config.selected_marker),
+                aruco.Dictionary_get(aruco.DICT_6X6_250),
                 parameters=parameters)
 
             frame_detection_result = None
@@ -60,7 +60,9 @@ class SingleMarkerTracking:
 
             if self.__tracking_config.show_video:
                 win_name = "Tracking"
-                cv2.namedWindow(win_name)
+                cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
+                cv2.setWindowProperty(
+                    win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
                 if np.all(ids is not None):
                     aruco.drawAxis(frame, cam_mtx, dist,
@@ -88,10 +90,9 @@ class SingleMarkerTracking:
 
 class SingleMarkerTrackingCofig:
 
-    def __init__(self, show_video, marker_lenght, selected_marker, server_ip, server_port):
+    def __init__(self, show_video, marker_lenght, server_ip, server_port):
         self.show_video = show_video
         self.marker_lenght = marker_lenght
-        self.selected_marker = selected_marker
         self.server_ip = server_ip
         self.server_port = server_port
 
@@ -106,11 +107,10 @@ class SingleMarkerTrackingCofig:
 
                 return cls(tracking_config_data['show_video'],
                            tracking_config_data['marker_lenght'],
-                           tracking_config_data['selected_marker'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'])
         except FileNotFoundError:
-            return cls(True, "", "", "", "")
+            return cls(True, "", "", "")
 
     def persist(self):
         # Overwrites any existing file.
@@ -118,6 +118,5 @@ class SingleMarkerTrackingCofig:
             pickle.dump({
                 'show_video': self.show_video,
                 'marker_lenght': self.marker_lenght,
-                'selected_marker': self.selected_marker,
                 'server_ip': self.server_ip,
                 'server_port': self.server_port}, output, pickle.HIGHEST_PROTOCOL)

@@ -37,9 +37,7 @@ class App():
         self.tracking_commands_frame.grid(row=1, column=1)
 
         self.start_tracking_button = tk.Button(
-            self.tracking_commands_frame, text="Start Tracking")
-        # self.start_tracking_button['command'] = lambda: self.tracking.single_marker_tracking(
-        #     self.webcam_selection.current(), self.show_video.get())
+            self.tracking_commands_frame, text="Start Tracking", command=self.start_tracking)
         self.start_tracking_button.grid(row=1, column=1)
 
         self.configuration_frame = tk.Frame(window)
@@ -180,38 +178,23 @@ class App():
             textvariable=self.chessboard_square_size)
         self.chessboard_square_size_entry.grid(row=1, column=2)
 
-        self.chessboard_row_count = tk.StringVar()
-        self.chessboard_row_count.set(
-            self.calibration_config.chessboard_row_count)
-        self.chessboard_row_count_label = ttk.Label(
-            self.calibration_chessboard_parameters_frame, text="Chessboard row count:")
-        self.chessboard_row_count_label.grid(row=2, column=1)
-        self.chessboard_row_count_entry = ttk.Entry(
-            self.calibration_chessboard_parameters_frame, width=5,
-            textvariable=self.chessboard_row_count)
-        self.chessboard_row_count_entry.grid(row=2, column=2)
-
-        self.chessboard_col_count = tk.StringVar()
-        self.chessboard_col_count.set(
-            self.calibration_config.chessboard_col_count)
-        self.chessboard_col_count_label = ttk.Label(
-            self.calibration_chessboard_parameters_frame, text="Chessboard column count:")
-        self.chessboard_col_count_label.grid(row=3, column=1)
-        self.chessboard_col_count_entry = ttk.Entry(
-            self.calibration_chessboard_parameters_frame, width=5,
-            textvariable=self.chessboard_col_count)
-        self.chessboard_col_count_entry.grid(row=3, column=2)
-
         self.utils_frame = tk.Frame(window)
         self.utils_frame.grid(row=3, column=1, sticky=tk.S)
 
         self.save_button = ttk.Button(
             self.utils_frame, text="Save", command=self.save)
-        self.save_button.grid(row=1, column=1, padx=5)
+        self.save_button.grid(row=1, column=1)
 
-        self.quit_button = ttk.Button(
-            self.utils_frame, text="Exit", command=window.destroy)
-        self.quit_button.grid(row=1, column=2, padx=5)
+    def refresh_video_sources(self):
+        self.video_source_list = video_device_listing.get_devices()
+        self.video_source['values'] = self.video_source_list
+
+    def start_tracking(self):
+        tracking = SingleMarkerTracking(self.tracking_config)
+        tracking.single_marker_tracking(self.video_source.current())
+
+    def stop_tracking(self):
+        pass
 
     # def Calibrate(self):
     #     config = CalibrationConfig(5, 10, 2.5)
@@ -225,10 +208,6 @@ class App():
     #     cam_capture.acquire_calibration_images(self.webcam_selection.current())
     #     return "tirou foto"
 
-    def refresh_video_sources(self):
-        self.video_source_list = video_device_listing.get_devices()
-        self.video_source['values'] = self.video_source_list
-
     def save(self):
         self.tracking_config.show_video = self.show_video.get()
         self.tracking_config.marker_lenght = self.marker_lenght.get()
@@ -237,8 +216,6 @@ class App():
         self.tracking_config.persist()
 
         self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
-        self.calibration_config.chessboard_row_count = self.chessboard_row_count.get()
-        self.calibration_config.chessboard_col_count = self.chessboard_col_count.get()
         self.calibration_config.persist()
 
 
