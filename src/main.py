@@ -65,15 +65,15 @@ class App():
         self.marker_parameters_frame = tk.Frame(self.tracking_config_frame)
         self.marker_parameters_frame.grid(row=2, column=1, pady=5)
 
-        self.marker_lenght = tk.StringVar()
-        self.marker_lenght.set(self.tracking_config.marker_lenght)
-        self.marker_lenght_label = ttk.Label(
-            self.marker_parameters_frame, text="Marker side lenght (cm):")
-        self.marker_lenght_label.grid(
+        self.marker_length = tk.StringVar()
+        self.marker_length.set(self.tracking_config.marker_lenght)
+        self.marker_length_label = ttk.Label(
+            self.marker_parameters_frame, text="Marker side length (cm):")
+        self.marker_length_label.grid(
             row=1, column=1, sticky=tk.W + tk.N)
-        self.marker_lenght_entry = ttk.Entry(
-            self.marker_parameters_frame, textvariable=self.marker_lenght, width=5)
-        self.marker_lenght_entry.grid(row=1, column=2, sticky=tk.W)
+        self.marker_length_entry = ttk.Entry(
+            self.marker_parameters_frame, textvariable=self.marker_length, width=5)
+        self.marker_length_entry.grid(row=1, column=2, sticky=tk.W)
 
         self.export_coordinates_frame = ttk.LabelFrame(
             self.tracking_config_frame, text="Coordinates Publish Server")
@@ -274,7 +274,7 @@ class App():
 
     def update_tracking_config(self):
         self.tracking_config.show_video = self.show_video.get()
-        self.tracking_config.marker_lenght = self.marker_lenght.get()
+        self.tracking_config.marker_length = self.marker_length.get()
         self.tracking_config.server_ip = self.server_ip.get()
         self.tracking_config.server_port = self.server_port.get()
 
