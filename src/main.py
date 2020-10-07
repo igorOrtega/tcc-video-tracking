@@ -222,7 +222,6 @@ class App():
         self.calibration.delete_calibration()
         self.update_calibration_status()
         self.update_calibration_images()
-        self.chessboard_square_size_entry['state'] = tk.ACTIVE
 
     def video_source_init(self, _=None):
         self.update_calibration_status()
@@ -243,9 +242,6 @@ class App():
             self.calibration_status['foreground'] = "red"
 
     def update_calibration_images(self):
-        if self.calibration.calibration_image_count > 0:
-            self.chessboard_square_size_entry['state'] = tk.DISABLED
-
         if self.calibration.calibration_image_count < 30:
             self.calibrate_button['state'] = tk.DISABLED
             self.calibration_image_count_label['text'] = "Calibration images count: {}\nMinimum: 30".format(
