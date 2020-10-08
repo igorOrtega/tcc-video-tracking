@@ -28,7 +28,7 @@ class SingleMarkerTrackingExecution:
             target=SingleMarkerTracking(
                 camera_parameters_save_dir, self.__data_queue).track,
             args=((tracking_config.video_source),
-                  (tracking_config.marker_lenght),
+                  (tracking_config.marker_length),
                   (tracking_config.show_video),))
         self.async_run_process.start()
 
@@ -46,7 +46,7 @@ class SingleMarkerTrackingExecution:
         tracking = SingleMarkerTracking(
             camera_parameters_save_dir, self.__data_queue)
         tracking.track(tracking_config.video_source,
-                       tracking_config.marker_lenght,
+                       tracking_config.marker_length,
                        tracking_config.show_video)
 
         self.__stop_server()
@@ -67,7 +67,7 @@ class SingleMarkerTracking:
         self.__camera_parameters_save_dir = camera_parameters_save_dir
         self.__data_queue = data_queue
 
-    def track(self, video_source, marker_lenght, show_video):
+    def track(self, video_source, marker_length, show_video):
         cam_mtx = np.load(
             "{}/cam_mtx.npy".format(self.__camera_parameters_save_dir))
         dist = np.load(
@@ -89,7 +89,7 @@ class SingleMarkerTracking:
             frame_detection_result = {}
             if np.all(ids is not None):
                 rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
-                    corners, float(marker_lenght), cam_mtx, dist)
+                    corners, float(marker_length), cam_mtx, dist)
 
                 frame_detection_result['timestamp'] = time.time()
                 frame_detection_result['success'] = 1
@@ -160,10 +160,10 @@ class SingleMarkerTracking:
 
 class SingleMarkerTrackingCofig:
 
-    def __init__(self, video_source, show_video, marker_lenght, server_ip, server_port):
+    def __init__(self, video_source, show_video, marker_length, server_ip, server_port):
         self.video_source = video_source
         self.show_video = show_video
-        self.marker_lenght = marker_lenght
+        self.marker_length = marker_length
         self.server_ip = server_ip
         self.server_port = server_port
 
@@ -178,7 +178,7 @@ class SingleMarkerTrackingCofig:
 
                 return cls(tracking_config_data['video_source'],
                            tracking_config_data['show_video'],
-                           tracking_config_data['marker_lenght'],
+                           tracking_config_data['marker_length'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'])
         except FileNotFoundError:
@@ -190,6 +190,6 @@ class SingleMarkerTrackingCofig:
             pickle.dump({
                 'video_source': self.video_source,
                 'show_video': self.show_video,
-                'marker_lenght': self.marker_lenght,
+                'marker_length': self.marker_length,
                 'server_ip': self.server_ip,
                 'server_port': self.server_port}, output, pickle.HIGHEST_PROTOCOL)
