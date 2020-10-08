@@ -27,12 +27,12 @@ class SingleMarkerTrackingScheduler:
             tracking_config = SingleMarkerTrackingCofig.persisted()
             queue = Queue(1)
 
-            server_process = Process(target=DataPublishServer(
+            client_process = Process(target=DataPublishClientUDP(
                 server_ip=tracking_config.server_ip,
                 server_port=int(tracking_config.server_port),
                 queue=queue
             ).listen)
-            server_process.start()
+            client_process.start()
 
             tracking_process = Process(target=SingleMarkerTracking(
                 queue=queue,
@@ -46,13 +46,14 @@ class SingleMarkerTrackingScheduler:
                 time.sleep(1)
 
                 if not tracking_process.is_alive():
-                    server_process.terminate()
+                    client_process.terminate()
                     self.stop_tracking.clear()
                     break
 
                 if self.stop_tracking.wait(0):
                     tracking_process.terminate()
-                    server_process.terminate()
+                    client_process.terminate()
+                    self.stop_tracking.clear()
                     break
 
 
@@ -156,7 +157,7 @@ class SingleMarkerTracking:
         self.__data_queue.put(data)
 
 
-class DataPublishServer:
+class DataPublishClientUDP:
 
     def __init__(self, server_ip, server_port, queue):
         self.server_ip = server_ip
@@ -164,20 +165,11 @@ class DataPublishServer:
         self.__queue = queue
 
     def listen(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind((self.server_ip, self.__server_port))
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        try:
-            sock.listen(1)
-            connection, _ = sock.accept()
-
-            while True:
-                data = self.__queue.get()
-                connection.send(data.encode())
-
-        except:
-            sock.close()
-            self.listen()
+        while True:
+            data = self.__queue.get()
+            sock.sendto(data.encode(), (self.server_ip, self.__server_port))
 
 
 class SingleMarkerTrackingCofig:
