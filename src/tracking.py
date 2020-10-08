@@ -5,75 +5,73 @@ except ModuleNotFoundError:
 
 import os
 import json
+import socket
 from multiprocessing import Process, Queue
 import time
 import numpy as np
 import cv2
 import cv2.aruco as aruco
-from socket_server import DataPublishServer
 
 
-class SingleMarkerTrackingExecution:
-    def __init__(self):
-        self.__data_queue = Queue(1)
+class SingleMarkerTrackingScheduler:
+    def __init__(self, start_tracking, stop_tracking):
+        self.start_tracking = start_tracking
+        self.stop_tracking = stop_tracking
 
-        self.async_run_process = None
-        self.server_process = None
+    def main(self):
 
-    def run_async(self, tracking_config, camera_parameters_save_dir):
-        self.__start_server(tracking_config.server_ip,
-                            tracking_config.server_port)
+        while True:
+            self.start_tracking.wait()
+            self.start_tracking.clear()
 
-        self.async_run_process = Process(
-            target=SingleMarkerTracking(
-                camera_parameters_save_dir, self.__data_queue).track,
-            args=((tracking_config.video_source),
-                  (tracking_config.marker_length),
-                  (tracking_config.show_video),))
-        self.async_run_process.start()
+            tracking_config = SingleMarkerTrackingCofig.persisted()
+            queue = Queue(1)
 
-    def stop_async(self):
-        if self.async_run_process is not None:
-            self.async_run_process.terminate()
-            self.async_run_process = None
+            server_process = Process(target=DataPublishServer(
+                server_ip=tracking_config.server_ip,
+                server_port=int(tracking_config.server_port),
+                queue=queue
+            ).listen)
+            server_process.start()
 
-        self.__stop_server()
+            tracking_process = Process(target=SingleMarkerTracking(
+                queue=queue,
+                device_number=tracking_config.device_number,
+                device_parameters_dir=tracking_config.device_parameters_dir,
+                show_video=tracking_config.show_video,
+                marker_length=tracking_config.marker_length).track)
+            tracking_process.start()
 
-    def run_sync(self, tracking_config, camera_parameters_save_dir):
-        self.__start_server(tracking_config.server_ip,
-                            tracking_config.server_port)
+            while True:
+                time.sleep(1)
 
-        tracking = SingleMarkerTracking(
-            camera_parameters_save_dir, self.__data_queue)
-        tracking.track(tracking_config.video_source,
-                       tracking_config.marker_length,
-                       tracking_config.show_video)
+                if not tracking_process.is_alive():
+                    server_process.terminate()
+                    self.stop_tracking.clear()
+                    break
 
-        self.__stop_server()
-
-    def __start_server(self, server_ip, server_port):
-        self.server_process = Process(target=DataPublishServer(server_ip, int(server_port)).start,
-                                      args=((self.__data_queue),))
-        self.server_process.start()
-
-    def __stop_server(self):
-        if self.server_process is not None:
-            self.server_process.terminate()
-            self.server_process = None
+                if self.stop_tracking.wait(0):
+                    tracking_process.terminate()
+                    server_process.terminate()
+                    break
 
 
 class SingleMarkerTracking:
-    def __init__(self, camera_parameters_save_dir, data_queue):
-        self.__camera_parameters_save_dir = camera_parameters_save_dir
-        self.__data_queue = data_queue
+    def __init__(self, queue, device_number, device_parameters_dir, show_video, marker_length):
+        self.__data_queue = queue
+        self.__device_number = device_number
+        self.__device_parameters_dir = device_parameters_dir
+        self.__show_video = show_video
+        self.__marker_length = marker_length
 
-    def track(self, video_source, marker_length, show_video):
+    def track(self):
         cam_mtx = np.load(
-            "{}/cam_mtx.npy".format(self.__camera_parameters_save_dir))
+            "{}/cam_mtx.npy".format(self.__device_parameters_dir))
         dist = np.load(
-            "{}/dist.npy".format(self.__camera_parameters_save_dir))
+            "{}/dist.npy".format(self.__device_parameters_dir))
 
-        video_capture = cv2.VideoCapture(video_source, cv2.CAP_DSHOW)
+        video_capture = cv2.VideoCapture(
+            self.__device_number, cv2.CAP_DSHOW)
 
         while True:
             _, frame = video_capture.read()
@@ -89,7 +87,7 @@ class SingleMarkerTracking:
             frame_detection_result = {}
             if np.all(ids is not None):
                 rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
-                    corners, float(marker_length), cam_mtx, dist)
+                    corners, float(self.__marker_length), cam_mtx, dist)
 
                 frame_detection_result['timestamp'] = time.time()
                 frame_detection_result['success'] = 1
@@ -106,7 +104,7 @@ class SingleMarkerTracking:
 
             self.__publish_coordinates(json.dumps(frame_detection_result))
 
-            if show_video:
+            if self.__show_video:
                 win_name = "Tracking"
                 cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
                 cv2.setWindowProperty(
@@ -158,10 +156,35 @@ class SingleMarkerTracking:
         self.__data_queue.put(data)
 
 
+class DataPublishServer:
+
+    def __init__(self, server_ip, server_port, queue):
+        self.server_ip = server_ip
+        self.__server_port = server_port
+        self.__queue = queue
+
+    def listen(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind((self.server_ip, self.__server_port))
+
+        try:
+            sock.listen(1)
+            connection, _ = sock.accept()
+
+            while True:
+                data = self.__queue.get()
+                connection.send(data.encode())
+
+        except:
+            sock.close()
+            self.listen()
+
+
 class SingleMarkerTrackingCofig:
 
-    def __init__(self, video_source, show_video, marker_length, server_ip, server_port):
-        self.video_source = video_source
+    def __init__(self, device_number, device_parameters_dir, show_video, marker_length, server_ip, server_port):
+        self.device_number = device_number
+        self.device_parameters_dir = device_parameters_dir
         self.show_video = show_video
         self.marker_length = marker_length
         self.server_ip = server_ip
@@ -176,19 +199,21 @@ class SingleMarkerTrackingCofig:
             with open('../assets/configs/tracking_config_data.pkl', 'rb') as file:
                 tracking_config_data = pickle.load(file)
 
-                return cls(tracking_config_data['video_source'],
+                return cls(tracking_config_data['device_number'],
+                           tracking_config_data['device_parameters_dir'],
                            tracking_config_data['show_video'],
                            tracking_config_data['marker_length'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'])
         except FileNotFoundError:
-            return cls(0, True, "", "", "")
+            return cls(0, "", True, "", "", "")
 
     def persist(self):
         # Overwrites any existing file.
         with open('../assets/configs/tracking_config_data.pkl', 'wb+') as output:
             pickle.dump({
-                'video_source': self.video_source,
+                'device_number': self.device_number,
+                'device_parameters_dir': self.device_parameters_dir,
                 'show_video': self.show_video,
                 'marker_length': self.marker_length,
                 'server_ip': self.server_ip,

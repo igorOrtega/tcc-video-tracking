@@ -1,14 +1,18 @@
 import os
 import tkinter as tk
+import multiprocessing
 from tkinter import ttk
 from calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 import video_device_listing
-from tracking import SingleMarkerTracking, SingleMarkerTrackingExecution, SingleMarkerTrackingCofig
+from tracking import SingleMarkerTrackingScheduler, SingleMarkerTracking, SingleMarkerTrackingCofig
 
 
 class App():
 
-    def __init__(self, window=None):
+    def __init__(self, start_tracking, stop_tracking, window):
+        self.start_tracking_event = start_tracking
+        self.stop_tracking_event = stop_tracking
+
         window.title("AR Tracking Interface")
 
         width = 600
@@ -66,7 +70,7 @@ class App():
         self.marker_parameters_frame.grid(row=2, column=1, pady=5)
 
         self.marker_length = tk.StringVar()
-        self.marker_length.set(self.tracking_config.marker_lenght)
+        self.marker_length.set(self.tracking_config.marker_length)
         self.marker_length_label = ttk.Label(
             self.marker_parameters_frame, text="Marker side length (cm):")
         self.marker_length_label.grid(
@@ -184,7 +188,6 @@ class App():
         self.save_button.grid(row=1, column=1)
 
         self.base_video_source_dir = '../assets/camera_calibration_data'
-        self.tracking_execution = SingleMarkerTrackingExecution()
         self.calibration = None
         self.video_source_init()
 
@@ -193,23 +196,20 @@ class App():
         self.video_source['values'] = self.video_source_list
 
     def start_tracking(self):
-        self.update_tracking_config()
+        self.save_tracking_config()
+        self.start_tracking_event.set()
 
-        if self.tracking_config.show_video:
-            self.tracking_execution.run_sync(
-                self.tracking_config, self.get_video_source_dir())
-        else:
-            self.tracking_execution.run_async(
-                self.tracking_config, self.get_video_source_dir())
+        if not self.tracking_config.show_video:
             self.tracking_button['text'] = "Stop Tracking"
             self.tracking_button['command'] = self.stop_tracking
 
     def stop_tracking(self):
-        self.tracking_execution.stop_async()
+        self.stop_tracking_event.set()
         self.tracking_button['text'] = "Start Tracking"
         self.tracking_button['command'] = self.start_tracking
 
     def calibrate(self):
+        self.save_calibration_config()
         self.calibration.run_calibration()
         self.update_calibration_status()
 
@@ -268,23 +268,38 @@ class App():
         camera_identification = self.video_source.get().replace(" ", "_")
         return '{}/{}'.format(self.base_video_source_dir, camera_identification)
 
-    def update_tracking_config(self):
+    def save_tracking_config(self):
+        self.tracking_config.device_number = self.video_source.current()
+        self.tracking_config.device_parameters_dir = self.get_video_source_dir()
         self.tracking_config.show_video = self.show_video.get()
         self.tracking_config.marker_length = self.marker_length.get()
         self.tracking_config.server_ip = self.server_ip.get()
         self.tracking_config.server_port = self.server_port.get()
 
-    def update_calibration_config(self):
+        self.tracking_config.persist()
+
+    def save_calibration_config(self):
         self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
 
-    def save(self):
-        self.update_tracking_config()
-        self.update_calibration_config()
-        self.tracking_config.persist()
         self.calibration_config.persist()
+
+    def save(self):
+        self.save_tracking_config()
+        self.save_calibration_config()
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
+
+    start_tracking_event = multiprocessing.Event()
+    stop_tracking_event = multiprocessing.Event()
+
+    tracking_scheduler_process = multiprocessing.Process(
+        target=SingleMarkerTrackingScheduler(start_tracking_event, stop_tracking_event).main)
+    tracking_scheduler_process.start()
+
     tk_root = tk.Tk()
-    App(tk_root)
+    App(start_tracking_event, stop_tracking_event, tk_root)
     tk_root.mainloop()
+
+    tracking_scheduler_process.terminate()
