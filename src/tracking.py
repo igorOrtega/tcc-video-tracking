@@ -90,14 +90,24 @@ class SingleMarkerTracking:
                 rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
                     corners, float(self.__marker_length), cam_mtx, dist)
 
+                r_mtx = np.zeros(shape=(3, 3))
+                cv2.Rodrigues(rvec, r_mtx)
+
                 frame_detection_result['timestamp'] = time.time()
                 frame_detection_result['success'] = 1
                 frame_detection_result['tx'] = tvec.item(0)
                 frame_detection_result['ty'] = tvec.item(1)
                 frame_detection_result['tz'] = tvec.item(2)
-                frame_detection_result['rx'] = rvec.item(0)
-                frame_detection_result['ry'] = rvec.item(1)
-                frame_detection_result['rz'] = rvec.item(2)
+
+                frame_detection_result['right_x'] = r_mtx.item(0, 0)
+                frame_detection_result['right_y'] = r_mtx.item(1, 0)
+                frame_detection_result['right_z'] = r_mtx.item(2, 0)
+                frame_detection_result['up_x'] = r_mtx.item(0, 1)
+                frame_detection_result['up_y'] = r_mtx.item(1, 1)
+                frame_detection_result['up_z'] = r_mtx.item(2, 1)
+                frame_detection_result['forward_x'] = r_mtx.item(0, 2)
+                frame_detection_result['forward_y'] = r_mtx.item(1, 2)
+                frame_detection_result['forward_z'] = r_mtx.item(2, 2)
 
             else:
                 frame_detection_result['timestamp'] = time.time()
@@ -132,11 +142,23 @@ class SingleMarkerTracking:
                                 font, font_scale, font_color, 2, cv2.LINE_AA)
                     cv2.putText(frame, 'tz: {:.2f}'.format(frame_detection_result['tz']), (0, 100),
                                 font, font_scale, font_color, 2, cv2.LINE_AA)
-                    cv2.putText(frame, 'rx: {:.2f}'.format(frame_detection_result['rx']), (0, 120),
+                    cv2.putText(frame, 'right_x: {:.2f}'.format(frame_detection_result['right_x']), (0, 120),
                                 font, font_scale, font_color, 2, cv2.LINE_AA)
-                    cv2.putText(frame, 'ry: {:.2f}'.format(frame_detection_result['ry']), (0, 140),
+                    cv2.putText(frame, 'right_y: {:.2f}'.format(frame_detection_result['right_y']), (0, 140),
                                 font, font_scale, font_color, 2, cv2.LINE_AA)
-                    cv2.putText(frame, 'rz: {:.2f}'.format(frame_detection_result['rz']), (0, 160),
+                    cv2.putText(frame, 'right_z: {:.2f}'.format(frame_detection_result['right_z']), (0, 160),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'up_x: {:.2f}'.format(frame_detection_result['up_x']), (0, 180),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'up_y: {:.2f}'.format(frame_detection_result['up_y']), (0, 200),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'up_z: {:.2f}'.format(frame_detection_result['up_z']), (0, 220),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'forward_x: {:.2f}'.format(frame_detection_result['forward_x']), (0, 240),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'forward_y: {:.2f}'.format(frame_detection_result['forward_y']), (0, 260),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'forward_z: {:.2f}'.format(frame_detection_result['forward_z']), (0, 280),
                                 font, font_scale, font_color, 2, cv2.LINE_AA)
 
                 cv2.putText(frame, "Q - Quit ", (0, 465), font,
