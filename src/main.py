@@ -115,14 +115,11 @@ class App():
         self.video_source_selection_frame = tk.Frame(self.video_source_frame)
         self.video_source_selection_frame.grid(row=1, column=1)
 
-        self.video_source_list = video_device_listing.get_devices()
         self.video_source = ttk.Combobox(
             self.video_source_selection_frame, state="readonly", height=4, width=25)
         self.video_source.bind('<<ComboboxSelected>>',
                                self.video_source_init)
         self.video_source.grid(row=1, column=1)
-        self.video_source['values'] = self.video_source_list
-        self.video_source.current(0)
 
         self.refresh_video_sources_button = tk.Button(
             self.video_source_selection_frame, text="Refresh")
@@ -189,11 +186,18 @@ class App():
 
         self.base_video_source_dir = '../assets/camera_calibration_data'
         self.calibration = None
+        self.video_source_list = []
+        self.refresh_video_sources()
         self.video_source_init()
 
     def refresh_video_sources(self):
-        self.video_source_list = video_device_listing.get_devices()
-        self.video_source['values'] = self.video_source_list
+        try:
+            self.video_source_list = video_device_listing.get_devices()
+            self.video_source['values'] = self.video_source_list
+            self.video_source.current(0)
+            self.capture_images_button['state'] = tk.ACTIVE
+        except SystemError:
+            self.capture_images_button['state'] = tk.DISABLED
 
     def start_tracking(self):
         self.save_tracking_config()
