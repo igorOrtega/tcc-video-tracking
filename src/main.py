@@ -3,8 +3,8 @@ import tkinter as tk
 import multiprocessing
 from tkinter import ttk
 from calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
+from tracking import TrackingScheduler, TrackingCofig
 import video_device_listing
-from tracking import SingleMarkerTrackingScheduler, SingleMarkerTracking, SingleMarkerTrackingCofig
 
 
 class App():
@@ -56,7 +56,7 @@ class App():
         self.tracking_config_frame.grid_rowconfigure(2, weight=1)
         self.tracking_config_frame.grid_rowconfigure(3, weight=1)
 
-        self.tracking_config = SingleMarkerTrackingCofig.persisted()
+        self.tracking_config = TrackingCofig.persisted()
 
         self.show_video_frame = tk.Frame(self.tracking_config_frame)
         self.show_video_frame.grid(row=1, column=1)
@@ -299,7 +299,7 @@ if __name__ == "__main__":
     stop_tracking_event = multiprocessing.Event()
 
     tracking_scheduler_process = multiprocessing.Process(
-        target=SingleMarkerTrackingScheduler(start_tracking_event, stop_tracking_event).main)
+        target=TrackingScheduler(start_tracking_event, stop_tracking_event).main)
     tracking_scheduler_process.start()
 
     tk_root = tk.Tk()

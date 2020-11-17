@@ -4,9 +4,15 @@ except ModuleNotFoundError:
     import pickle
 
 import os
+import copy
 import glob
 import cv2
 import numpy as np
+import cv2.aruco as aruco
+
+
+def mean(nums):
+    return float(sum(nums)) / max(len(nums), 1)
 
 
 class VideoSourceCalibration:
@@ -125,6 +131,229 @@ class VideoSourceCalibration:
             cv2.imwrite(save_path, gray)
 
 
+class MarkerCubeCalibration:
+    def __init__(self, device_number, device_parameters_dir, main_id, marker_length):
+        self.__device_number = device_number
+        self.__device_parameters_dir = device_parameters_dir
+        self.__main_id = main_id
+        self.__marker_length = marker_length
+
+    def calibration(self):
+        cam_mtx = np.load(
+            "{}/cam_mtx.npy".format(self.__device_parameters_dir))
+        dist = np.load(
+            "{}/dist.npy".format(self.__device_parameters_dir))
+
+        win_name = "Marker Cube Calibration"
+        cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty(
+            win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
+        video_capture = cv2.VideoCapture(self.__device_number, cv2.CAP_DSHOW)
+
+        offsets = {}
+        # offset_transformation = None
+        # calculations = 0
+        # errx_values = []
+        # erry_values = []
+        # errz_values = []
+        while True:
+            _, frame = video_capture.read()
+
+            parameters = aruco.DetectorParameters_create()
+            parameters.adaptiveThreshConstant = 10
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            font_color = (0, 255, 0)
+
+            corners, ids, _ = aruco.detectMarkers(
+                cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
+                aruco.Dictionary_get(aruco.DICT_6X6_250),
+                parameters=parameters)
+
+            rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
+                corners, float(self.__marker_length), cam_mtx, dist)
+
+            main_marker_detected = False
+            main_index = 0
+
+            if np.all(ids is not None):
+                choosen_index = 0
+                choosen_id = ids[0][0]
+
+                for i in range(0, ids.size):
+                    if tvec[choosen_index][0][2] > tvec[i][0][2]:
+                        choosen_id = ids[i][0]
+                        choosen_index = i
+
+                    if ids[i][0] == self.__main_id:
+                        main_marker_detected = True
+                        main_index = i
+
+                other_rotation = copy.deepcopy(rvec[choosen_index])
+                other_translation = copy.deepcopy(tvec[choosen_index])
+
+                other_rotation_matrix = np.zeros(shape=(3, 3))
+                cv2.Rodrigues(other_rotation, other_rotation_matrix)
+
+                other_transformation = np.concatenate(
+                    (other_rotation_matrix, np.transpose(other_translation)), axis=1)
+                other_transformation = np.concatenate(
+                    (other_transformation, np.array([[0, 0, 0, 1]])))
+
+                if main_marker_detected and choosen_id != self.__main_id:
+                    main_rotation = copy.deepcopy(rvec[main_index])
+                    main_translation = copy.deepcopy(tvec[main_index])
+
+                    main_rotation_matrix = np.zeros(shape=(3, 3))
+                    cv2.Rodrigues(main_rotation, main_rotation_matrix)
+
+                    main_transformation = np.concatenate(
+                        (main_rotation_matrix, np.transpose(main_translation)), axis=1)
+                    main_transformation = np.concatenate(
+                        (main_transformation, np.array([[0, 0, 0, 1]])))
+
+                    if choosen_id not in offsets:
+                        offsets[choosen_id] = {}
+                        offsets[choosen_id]["transformation"] = None
+                        offsets[choosen_id]["calculations"] = 0
+
+                    if offsets[choosen_id]["transformation"] is None or offsets[choosen_id]["calculations"] < 200:
+                        offsets[choosen_id]["transformation"] = np.dot(
+                            np.linalg.inv(main_transformation), other_transformation)
+                        offsets[choosen_id]["calculations"] += 1
+
+                        # rotation_offset_matrix = np.dot(
+                        #     np.linalg.inv(main_rotation_matrix), other_rotation_matrix)
+
+                    # errx = tvec[0][0][0] - tvec[1][0][0]
+                    # erry = tvec[0][0][1] - tvec[1][0][1]
+                    # errz = tvec[0][0][2] - tvec[1][0][2]
+
+                    # cv2.putText(frame, 'errx {:.2f} erry {:.2f} errz {:.2f} tvec 0'.format(
+                    #     errx, erry, errz), (0, 60), font, font_scale, font_color, 2, cv2.LINE_AA)
+
+                    # if offsets[other_id]["calculations"] == 200:
+                    #     errx_values.append(errx)
+                    #     erry_values.append(erry)
+                    #     errz_values.append(errz)
+                    #     cv2.putText(frame, 'mean errx {:.2f} mean erry {:.2f} mean errz {:.2f} tvec 0'.format(mean(
+                    #         errx_values), mean(erry_values), mean(errz_values)), (0, 80), font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'calcs {:.2f}'.format(
+                        offsets[choosen_id]["calculations"]), (0, 400), font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, '{:.2f} {:.2f} {:.2f} tvec 1'.format(
+                    #     tvec[1][0][0], tvec[1][0][1], tvec[1][0][2]), (0, 80), font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_right_y: {:.2f}'.format(rotation_offset_matrix[1][0]), (0, 140),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_right_z: {:.2f}'.format(rotation_offset_matrix[2][0]), (0, 160),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_up_x: {:.2f}'.format(rotation_offset_matrix[0][1]), (0, 180),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_up_y: {:.2f}'.format(rotation_offset_matrix[1][1]), (0, 200),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_up_z: {:.2f}'.format(rotation_offset_matrix[2][1]), (0, 220),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_forward_x: {:.2f}'.format(rotation_offset_matrix[0][2]), (0, 240),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_forward_y: {:.2f}'.format(rotation_offset_matrix[1][2]), (0, 260),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+                    # cv2.putText(frame, 'rotation_offset_forward_z: {:.2f}'.format(rotation_offset_matrix[2][2]), (0, 280),
+                    #             font, font_scale, font_color, 2, cv2.LINE_AA)
+
+                if choosen_id == self.__main_id:
+                    aruco.drawAxis(frame, cam_mtx, dist,
+                                   rvec[choosen_index], tvec[choosen_index], 5)
+
+                    choosen_rot = np.zeros(shape=(3, 3))
+                    cv2.Rodrigues(rvec[choosen_index], choosen_rot)
+                    cv2.putText(frame, 'translation_x: {:.2f}'.format(tvec[choosen_index][0][0]), (0, 60),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'translation_y: {:.2f}'.format(tvec[choosen_index][0][1]), (0, 80),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'translation_z: {:.2f}'.format(tvec[choosen_index][0][2]), (0, 100),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_right_x: {:.2f}'.format(choosen_rot[0][0]), (0, 120),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_right_y: {:.2f}'.format(choosen_rot[1][0]), (0, 140),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_right_z: {:.2f}'.format(choosen_rot[2][0]), (0, 160),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_up_x: {:.2f}'.format(choosen_rot[0][1]), (0, 180),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_up_y: {:.2f}'.format(choosen_rot[1][1]), (0, 200),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_up_z: {:.2f}'.format(choosen_rot[2][1]), (0, 220),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_forward_x: {:.2f}'.format(choosen_rot[0][2]), (0, 240),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_forward_y: {:.2f}'.format(choosen_rot[1][2]), (0, 260),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_forward_z: {:.2f}'.format(choosen_rot[2][2]), (0, 280),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+
+                elif choosen_id in offsets and offsets[choosen_id]["transformation"] is not None and offsets[choosen_id]["calculations"] == 200:
+                    result = np.dot(
+                        offsets[choosen_id]["transformation"], np.linalg.inv(other_transformation))
+
+                    result = np.linalg.inv(result)
+                    new_tvec = result[:, 3]
+                    new_tvec = np.delete(new_tvec, (3))
+                    tvec[choosen_index] = new_tvec.T
+
+                    result = np.delete(result, 3, 0)
+                    result = np.delete(result, 3, 1)
+                    new_rot, _ = cv2.Rodrigues(result)
+                    rvec[choosen_index] = new_rot.T
+
+                    aruco.drawAxis(frame, cam_mtx, dist,
+                                   rvec[choosen_index], tvec[choosen_index], 5)
+
+                    choosen_rot = np.zeros(shape=(3, 3))
+                    cv2.Rodrigues(rvec[choosen_index], choosen_rot)
+                    cv2.putText(frame, 'translation_x: {:.2f}'.format(tvec[choosen_index][0][0]), (0, 60),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'translation_y: {:.2f}'.format(tvec[choosen_index][0][1]), (0, 80),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'translation_z: {:.2f}'.format(tvec[choosen_index][0][2]), (0, 100),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_right_x: {:.2f}'.format(choosen_rot[0][0]), (0, 120),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_right_y: {:.2f}'.format(choosen_rot[1][0]), (0, 140),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_right_z: {:.2f}'.format(choosen_rot[2][0]), (0, 160),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_up_x: {:.2f}'.format(choosen_rot[0][1]), (0, 180),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_up_y: {:.2f}'.format(choosen_rot[1][1]), (0, 200),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_up_z: {:.2f}'.format(choosen_rot[2][1]), (0, 220),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_forward_x: {:.2f}'.format(choosen_rot[0][2]), (0, 240),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_forward_y: {:.2f}'.format(choosen_rot[1][2]), (0, 260),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+                    cv2.putText(frame, 'rotation_forward_z: {:.2f}'.format(choosen_rot[2][2]), (0, 280),
+                                font, font_scale, font_color, 2, cv2.LINE_AA)
+
+                aruco.drawDetectedMarkers(frame, corners)
+
+            cv2.putText(frame, "Q - Quit ", (0, 465), font,
+                        font_scale, font_color, 2, cv2.LINE_AA)
+
+            cv2.imshow(win_name, frame)
+
+            key = cv2.waitKey(1)
+
+            if key == ord('m'):
+                pass
+
+            elif key == ord('q'):
+                video_capture.release()
+                cv2.destroyAllWindows()
+                break
+
+
 class VideoSourceCalibrationConfig:
 
     def __init__(self, chessboard_square_size):
@@ -147,3 +376,10 @@ class VideoSourceCalibrationConfig:
         with open('../assets/configs/calibration_config_data.pkl', 'wb+') as output:
             pickle.dump({
                 'chessboard_square_size': self.chessboard_square_size}, output, pickle.HIGHEST_PROTOCOL)
+
+
+if __name__ == "__main__":
+    tst = MarkerCubeCalibration(
+        0, "C:/Users/Igor Ortega/Documents/python/Projects/tcc-video-tracking/assets/camera_calibration_data/Logitech_HD_Webcam_C270", 1, 3.9)
+
+    tst.calibration()
