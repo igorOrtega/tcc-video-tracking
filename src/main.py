@@ -2,8 +2,9 @@ import os
 import tkinter as tk
 import multiprocessing
 from tkinter import ttk
-from calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
+from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 from tracking import TrackingScheduler, TrackingCofig
+from marker_detection_settings import CUBE_DETECTION, SINGLE_DETECTION, SingleMarkerDetectionSettings, MarkersCubeDetectionSettings, MarkerCubeMapping
 import video_device_listing
 
 
@@ -66,18 +67,92 @@ class App():
             self.show_video_frame, text="Show video", variable=self.show_video)
         self.show_video_checkbox.grid(row=1, column=1, pady=5)
 
-        self.marker_parameters_frame = tk.Frame(self.tracking_config_frame)
-        self.marker_parameters_frame.grid(row=2, column=1, pady=5)
+        self.detection_mode_frame = tk.Frame(self.tracking_config_frame)
+        self.detection_mode_frame.grid(row=2, column=1, padx=5, pady=5)
+        
+        self.single_marker_frame = ttk.LabelFrame(
+            self.detection_mode_frame, text="Single Marker")
+        self.single_marker_frame.grid(
+            row=1, column=1, padx=5, pady=5)
 
-        self.marker_length = tk.StringVar()
-        self.marker_length.set(self.tracking_config.marker_length)
-        self.marker_length_label = ttk.Label(
-            self.marker_parameters_frame, text="Marker side length (cm):")
-        self.marker_length_label.grid(
+        self.single_marker_mode = tk.BooleanVar()
+        # self.single_marker_mode.set(self.tracking_config.show_video)
+        self.single_marker_mode_checkbox = tk.Checkbutton(
+            self.single_marker_frame, variable=self.single_marker_mode)
+        self.single_marker_mode_checkbox.grid(row=1, column=1, pady=5)
+
+        self.single_marker_settings_frame = tk.Frame(
+            self.single_marker_frame)
+        self.single_marker_settings_frame.grid(
+            row=2, column=1, padx=5, pady=5)
+
+        self.single_marker_id = tk.StringVar()
+        # self.single_marker_id.set(self.tracking_config.marker_length)
+        self.single_marker_id_label = ttk.Label(
+            self.single_marker_settings_frame, text="Marker Id:")
+        self.single_marker_id_label.grid(
             row=1, column=1, sticky=tk.W + tk.N)
-        self.marker_length_entry = ttk.Entry(
-            self.marker_parameters_frame, textvariable=self.marker_length, width=5)
-        self.marker_length_entry.grid(row=1, column=2, sticky=tk.W)
+        self.single_marker_id_entry = ttk.Entry(
+            self.single_marker_settings_frame, textvariable=self.single_marker_id, width=5)
+        self.single_marker_id_entry.grid(row=1, column=2, sticky=tk.W)
+
+        self.single_marker_length = tk.StringVar()
+        # self.single_marker_length.set(self.tracking_config.marker_length)
+        self.single_marker_length_label = ttk.Label(
+            self.single_marker_settings_frame, text="Marker length:")
+        self.single_marker_length_label.grid(
+            row=2, column=1, sticky=tk.W + tk.N)
+        self.single_marker_length_entry = ttk.Entry(
+            self.single_marker_settings_frame, textvariable=self.single_marker_length, width=5)
+        self.single_marker_length_entry.grid(row=2, column=2, sticky=tk.W)
+
+        self.marker_cube_frame = ttk.LabelFrame(
+            self.detection_mode_frame, text="Marker Cube")
+        self.marker_cube_frame.grid(
+            row=1, column=2, padx=5, pady=5)
+
+        self.marker_cube_mode = tk.BooleanVar()
+        # self.single_marker_mode.set(self.tracking_config.show_video)
+        self.marker_cube_mode_checkbox = tk.Checkbutton(
+            self.marker_cube_frame, variable=self.marker_cube_mode)
+        self.marker_cube_mode_checkbox.grid(row=1, column=1, pady=5)
+
+        self.marker_cube_settings_frame = tk.Frame(
+            self.marker_cube_frame)
+        self.marker_cube_settings_frame.grid(
+            row=2, column=1, padx=5, pady=5)
+
+        self.cube_main_marker_id = tk.StringVar()
+        # self.single_marker_id.set(self.tracking_config.marker_length)
+        self.cube_main_marker_id_label = ttk.Label(
+            self.marker_cube_settings_frame, text="Main Marker Id:")
+        self.cube_main_marker_id_label.grid(
+            row=1, column=1, sticky=tk.W + tk.N)
+        self.cube_main_marker_id_entry = ttk.Entry(
+            self.marker_cube_settings_frame, textvariable=self.cube_main_marker_id, width=5)
+        self.cube_main_marker_id_entry.grid(row=1, column=2, sticky=tk.W)
+
+        self.cube_other_marker_ids = tk.StringVar()
+        # self.single_marker_ids.set(self.tracking_config.marker_length)
+        self.cube_other_marker_ids_label = ttk.Label(
+            self.marker_cube_settings_frame, text="Other Marker Ids:")
+        self.cube_other_marker_ids_label.grid(
+            row=2, column=1, sticky=tk.W + tk.N)
+        self.cube_other_marker_ids_entry = ttk.Entry(
+            self.marker_cube_settings_frame, textvariable=self.cube_other_marker_ids, width=5)
+        self.cube_other_marker_ids_entry.grid(row=2, column=2, sticky=tk.W)
+
+        self.cube_markers_length = tk.StringVar()
+        # self.single_marker_length.set(self.tracking_config.marker_length)
+        self.cube_markers_length_label = ttk.Label(
+            self.marker_cube_settings_frame, text="Markers length:")
+        self.cube_markers_length_label.grid(
+            row=3, column=1, sticky=tk.W + tk.N)
+        self.cube_markers_length_entry = ttk.Entry(
+            self.marker_cube_settings_frame, textvariable=self.cube_markers_length, width=5)
+        self.cube_markers_length_entry.grid(row=3, column=2, sticky=tk.W)
+
+
 
         self.export_coordinates_frame = ttk.LabelFrame(
             self.tracking_config_frame, text="Coordinates Publish Server")
@@ -189,6 +264,10 @@ class App():
         self.video_source_list = []
         self.refresh_video_sources()
         self.video_source_init()
+
+    def detection_frame_build(self, _=None):
+        # self.reference = self.single_marker_frame
+        pass
 
     def refresh_video_sources(self):
         try:
