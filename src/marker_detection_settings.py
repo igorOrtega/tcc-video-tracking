@@ -11,6 +11,7 @@ import cv2.aruco as aruco
 CUBE_DETECTION = "MARKERS CUBE"
 SINGLE_DETECTION = "SINGLE MARKER"
 
+
 class SingleMarkerDetectionSettings():
 
     def __init__(self, marker_length, marker_id):
@@ -25,7 +26,6 @@ class SingleMarkerDetectionSettings():
                 'marker_length': self.marker_length,
                 'marker_id': self.marker_id}, output, pickle.HIGHEST_PROTOCOL)
 
-
     @classmethod
     def persisted(cls):
         if not os.path.exists('../assets/configs/'):
@@ -39,14 +39,16 @@ class SingleMarkerDetectionSettings():
                            settings['marker_id'])
 
         except FileNotFoundError:
-            return cls(None, None)
+            return cls("", "")
+
 
 class MarkersCubeDetectionSettings():
 
-    def __init__(self, markers_length, main_marker_id, transformations):
+    def __init__(self, markers_length, main_marker_id, other_marker_ids, transformations):
         self.identifier = CUBE_DETECTION
         self.markers_length = markers_length
         self.main_marker_id = main_marker_id
+        self.other_marker_ids = other_marker_ids
         self.transformations = transformations
 
     def persist(self, cube_id):
@@ -55,6 +57,7 @@ class MarkersCubeDetectionSettings():
             pickle.dump({
                 'markers_length': self.markers_length,
                 'main_marker_id': self.main_marker_id,
+                'other_marker_ids': self.other_marker_ids,
                 'transformations': self.transformations}, output, pickle.HIGHEST_PROTOCOL)
 
     @classmethod
@@ -68,10 +71,12 @@ class MarkersCubeDetectionSettings():
 
                 return cls(settings['markers_length'],
                            settings['main_marker_id'],
+                           settings['other_marker_ids'],
                            settings['transformations'])
 
         except FileNotFoundError:
-            return cls(None, None, None)
+            return cls("", "", ["", "", "", ""], None)
+
 
 class MarkerCubeMapping:
 
@@ -101,15 +106,16 @@ class MarkerCubeMapping:
             win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
         video_capture = cv2.VideoCapture(self.__video_source, cv2.CAP_DSHOW)
-        
+
         while True:
             _, frame = video_capture.read()
             option = cv2.waitKey(1)
 
             done = True
             for other_id in self.__other_ids:
-                done &= len(transformations[other_id]) == self.__acquire_min_count
-            
+                done &= len(transformations[other_id]
+                            ) == self.__acquire_min_count
+
             if not done:
                 corners, ids = self.__detect_markers(frame)
 
@@ -117,8 +123,7 @@ class MarkerCubeMapping:
                 scale = 0.6
                 blue = (255, 0, 0)
                 red = (0, 0, 255)
-                green = (0, 255,0)
-                
+                green = (0, 255, 0)
 
                 if np.all(ids is not None):
 
@@ -133,30 +138,41 @@ class MarkerCubeMapping:
                                 other_marker_index = i
 
                         if main_marker_index is None:
-                            cv2.putText(frame, "Cannot detect main marker!", (0, 20), font, scale, blue, 2, cv2.LINE_AA)
+                            cv2.putText(frame, "Cannot detect main marker!",
+                                        (0, 20), font, scale, blue, 2, cv2.LINE_AA)
                         elif other_marker_index is None:
-                            cv2.putText(frame, "Only main marker detected!", (0, 20), font, scale, blue, 2, cv2.LINE_AA)
+                            cv2.putText(frame, "Only main marker detected!",
+                                        (0, 20), font, scale, blue, 2, cv2.LINE_AA)
                         else:
-                            rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, float(self.__markers_length), cam_mtx, dist)
-                            
+                            rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
+                                corners, float(self.__markers_length), cam_mtx, dist)
+
                             cv2.putText(frame, "marker {} (main) -> marker {} mapping".format(
                                 ids[main_marker_index][0], ids[other_marker_index][0]), (0, 20), font, scale, blue, 2, cv2.LINE_AA)
 
-                            acquired_transformations_count = len(transformations[ids[other_marker_index][0]])
-                            if acquired_transformations_count < self.__acquire_min_count :
-                                cv2.putText(frame, "Press 'ENTER' {} times, in diffetent angles".format(self.__acquire_min_count),(0, 40), font, scale, blue, 2, cv2.LINE_AA)
-                                cv2.putText(frame, "Count: {}".format(acquired_transformations_count), (0, 60), font, scale, red, 2, cv2.LINE_AA)
+                            acquired_transformations_count = len(
+                                transformations[ids[other_marker_index][0]])
+                            if acquired_transformations_count < self.__acquire_min_count:
+                                cv2.putText(frame, "Press 'ENTER' {} times, in diffetent angles".format(
+                                    self.__acquire_min_count), (0, 40), font, scale, blue, 2, cv2.LINE_AA)
+                                cv2.putText(frame, "Count: {}".format(
+                                    acquired_transformations_count), (0, 60), font, scale, red, 2, cv2.LINE_AA)
 
                                 # enter
                                 if option == 13:
-                                    main_marker_transformation = self.__get_transformation_matrix(rvecs[main_marker_index], tvecs[main_marker_index])
-                                    other_marker_transformation = self.__get_transformation_matrix(rvecs[other_marker_index], tvecs[other_marker_index])
+                                    main_marker_transformation = self.__get_transformation_matrix(
+                                        rvecs[main_marker_index], tvecs[main_marker_index])
+                                    other_marker_transformation = self.__get_transformation_matrix(
+                                        rvecs[other_marker_index], tvecs[other_marker_index])
 
-                                    transformation_other_to_main = np.dot(np.linalg.inv(main_marker_transformation), other_marker_transformation)
-                                    transformations[ids[other_marker_index][0]].append(transformation_other_to_main)
+                                    transformation_other_to_main = np.dot(np.linalg.inv(
+                                        main_marker_transformation), other_marker_transformation)
+                                    transformations[ids[other_marker_index][0]].append(
+                                        transformation_other_to_main)
 
                             else:
-                                cv2.putText(frame, "Done!", (0, 40), font, scale, green, 2, cv2.LINE_AA)
+                                cv2.putText(frame, "Done!", (0, 40),
+                                            font, scale, green, 2, cv2.LINE_AA)
 
                     else:
                         cv2.putText(frame, "Too many markers detected!", (0, 20), font,
@@ -164,7 +180,6 @@ class MarkerCubeMapping:
                 else:
                     cv2.putText(frame, "No markers detected!", (0, 20), font,
                                 scale, blue, 2, cv2.LINE_AA)
-
 
                 cv2.putText(frame, "Q - Quit ", (0, 465), font,
                             scale, blue, 2, cv2.LINE_AA)
@@ -176,9 +191,11 @@ class MarkerCubeMapping:
 
             if done:
                 for other_id in self.__other_ids:
-                    transformations[other_id] = self.__mean_transformation(transformations[other_id])
-                
-                settings = MarkersCubeDetectionSettings(self.__markers_length, self.__main_marker_id, transformations)
+                    transformations[other_id] = self.__mean_transformation(
+                        transformations[other_id])
+
+                settings = MarkersCubeDetectionSettings(
+                    self.__markers_length, self.__main_marker_id, self.__other_ids, transformations)
                 settings.persist(self.__cube_id)
 
                 cv2.waitKey(1000)
@@ -214,7 +231,7 @@ class MarkerCubeMapping:
             (transformation, np.array([[0, 0, 0, 1]])))
 
         return transformation
-        
+
     def __mean_transformation(self, transformations):
         result = np.zeros(shape=(4, 4))
         rows_count, cols_count = result.shape

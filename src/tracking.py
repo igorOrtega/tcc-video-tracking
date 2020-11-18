@@ -11,6 +11,7 @@ import time
 import numpy as np
 import cv2
 import cv2.aruco as aruco
+from marker_detection_settings import SINGLE_DETECTION, CUBE_DETECTION
 
 
 class TrackingScheduler:
@@ -39,7 +40,7 @@ class TrackingScheduler:
                 device_number=tracking_config.device_number,
                 device_parameters_dir=tracking_config.device_parameters_dir,
                 show_video=tracking_config.show_video,
-                marker_length=tracking_config.marker_length).track)
+                marker_detection_settings=tracking_config.marker_detection_settings).track)
             tracking_process.start()
 
             while True:
@@ -58,12 +59,12 @@ class TrackingScheduler:
 
 
 class Tracking:
-    def __init__(self, queue, device_number, device_parameters_dir, show_video, marker_detection_config):
+    def __init__(self, queue, device_number, device_parameters_dir, show_video, marker_detection_settings):
         self.__data_queue = queue
         self.__device_number = device_number
         self.__device_parameters_dir = device_parameters_dir
         self.__show_video = show_video
-        self.__marker_detection_config = marker_detection_config
+        self.__marker_detection_settings = marker_detection_settings
 
     def track(self):
         video_capture = cv2.VideoCapture(
@@ -73,12 +74,12 @@ class Tracking:
             _, frame = video_capture.read()
 
             detection_result = None
-            if self.__marker_detection_config.identifier == "SINGLE_MARKER":
+            if self.__marker_detection_settings.identifier == SINGLE_DETECTION:
                 detection_result = self.__single_marker_detection(frame)
-            elif self.__marker_detection_config.identifier == "MARKERS_CUBE":
+            elif self.__marker_detection_settings.identifier == CUBE_DETECTION:
                 detection_result = self.__markers_cube_detection(frame)
             else:
-                raise Exception("Invalid detection identifier.")
+                raise Exception("Invalid detection identifier. Received: {}".format(self.__marker_detection_settings.identifier))
 
             self.__publish_coordinates(json.dumps(detection_result))
 
@@ -102,7 +103,7 @@ class Tracking:
             marker_index = None
 
             for i in range(0, ids.size):
-                if ids[i][0] == self.__marker_detection_config.marker_id:
+                if ids[i][0] == self.__marker_detection_settings.marker_id:
                     marker_found = True
                     marker_index = i
                     break
@@ -110,7 +111,7 @@ class Tracking:
             if marker_found:
                 cam_mtx, dist = self.__camera_parameters()
                 rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
-                    corners, float(self.__marker_detection_config.marker_length), cam_mtx, dist)
+                    corners, float(self.__marker_detection_settings.marker_length), cam_mtx, dist)
 
                 marker_rvec = rvecs[marker_index]
                 marker_tvec = tvecs[marker_index]
@@ -128,16 +129,16 @@ class Tracking:
 
             cam_mtx, dist = self.__camera_parameters()
             rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
-                corners, float(self.__marker_detection_config.markers_length), cam_mtx, dist)
+                corners, float(self.__marker_detection_settings.markers_length), cam_mtx, dist)
 
             choosen_marker_index = 0
             choosen_marker_id = ids[0][0]
             for i in range(0, ids.size):
                 if tvecs[choosen_marker_index][0][2] > tvecs[i][0][2]:
-                    choosen_id = ids[i][0]
+                    choosen_marker_id = ids[i][0]
                     choosen_marker_index = i
 
-            if choosen_marker_id == self.__marker_detection_config.main_marker_id:
+            if choosen_marker_id == self.__marker_detection_settings.main_marker_id:
                 main_marker_rvec = rvecs[choosen_marker_index]
                 main_marker_tvec = tvecs[choosen_marker_index]
             else:
@@ -150,7 +151,7 @@ class Tracking:
                     (choosen_marker_transformation, np.array([[0, 0, 0, 1]])))
 
                 choosen_marker_transformation = np.dot(
-                    self.__marker_detection_config.transformations[choosen_id]["transformation"],
+                    self.__marker_detection_settings.transformations[choosen_marker_id],
                     np.linalg.inv(choosen_marker_transformation))
 
                 choosen_marker_transformation = np.linalg.inv(
@@ -168,7 +169,7 @@ class Tracking:
                 rvec_t, _ = cv2.Rodrigues(choosen_marker_transformation)
                 main_marker_rvec = rvec_t.T
 
-                aruco.drawAxis(frame, cam_mtx, dist,
+            aruco.drawAxis(frame, cam_mtx, dist,
                                main_marker_rvec, main_marker_tvec, 5)
 
         return self.__detection_result(main_marker_rvec, main_marker_tvec)
@@ -206,18 +207,18 @@ class Tracking:
             rot_mtx = np.zeros(shape=(3, 3))
             cv2.Rodrigues(rvec, rot_mtx)
 
-            detection_result['translation_x'] = tvec[0][0]
-            detection_result['translation_y'] = tvec[0][1]
-            detection_result['translation_z'] = tvec[0][2]
-            detection_result['rotation_right_x'] = rot_mtx[0][0]
-            detection_result['rotation_right_y'] = rot_mtx[1][0]
-            detection_result['rotation_right_z'] = rot_mtx[2][0]
-            detection_result['rotation_up_x'] = rot_mtx[0][1]
-            detection_result['rotation_up_y'] = rot_mtx[1][1]
-            detection_result['rotation_up_z'] = rot_mtx[2][1]
-            detection_result['rotation_forward_x'] = rot_mtx[0][2]
-            detection_result['rotation_forward_y'] = rot_mtx[1][2]
-            detection_result['rotation_forward_z'] = rot_mtx[2][2]
+            detection_result['translation_x'] = tvec.item(0)
+            detection_result['translation_y'] = tvec.item(1)
+            detection_result['translation_z'] = tvec.item(2)
+            detection_result['rotation_right_x'] = rot_mtx.item(0, 0)
+            detection_result['rotation_right_y'] = rot_mtx.item(1, 0)
+            detection_result['rotation_right_z'] = rot_mtx.item(2, 0)
+            detection_result['rotation_up_x'] = rot_mtx.item(0, 1)
+            detection_result['rotation_up_y'] = rot_mtx.item(1, 1)
+            detection_result['rotation_up_z'] = rot_mtx.item(2, 1)
+            detection_result['rotation_forward_x'] = rot_mtx.item(0, 2)
+            detection_result['rotation_forward_y'] = rot_mtx.item(1, 2)
+            detection_result['rotation_forward_z'] = rot_mtx.item(2, 2)
 
         return detection_result
 
@@ -292,16 +293,13 @@ class DataPublishClientUDP:
 class TrackingCofig:
 
     def __init__(self, device_number, device_parameters_dir, show_video,
-                 server_ip, server_port, marker_length, main_marker_id,
-                 enable_cube=False):
+                 server_ip, server_port, marker_detection_settings):
         self.device_number = device_number
         self.device_parameters_dir = device_parameters_dir
         self.show_video = show_video
         self.server_ip = server_ip
         self.server_port = server_port
-        self.marker_length = marker_length
-        self.main_marker_id = main_marker_id
-        self.enable_cube = enable_cube
+        self.marker_detection_settings = marker_detection_settings
 
     @classmethod
     def persisted(cls):
@@ -317,11 +315,9 @@ class TrackingCofig:
                            tracking_config_data['show_video'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'],
-                           tracking_config_data['marker_length'],
-                           tracking_config_data['main_marker_id'],
-                           tracking_config_data['enable_cube'],)
+                           tracking_config_data['marker_detection_settings'])
         except FileNotFoundError:
-            return cls(0, "", True, "", 0, 0, 0)
+            return cls(0, "", True, "", "", "")
 
     def persist(self):
         # Overwrites any existing file.
@@ -332,6 +328,4 @@ class TrackingCofig:
                 'show_video': self.show_video,
                 'server_ip': self.server_ip,
                 'server_port': self.server_port,
-                'marker_length': self.marker_length,
-                'main_marker_id': self.main_marker_id,
-                'enable_cube': self.enable_cube, }, output, pickle.HIGHEST_PROTOCOL)
+                'marker_detection_settings': self.marker_detection_settings}, output, pickle.HIGHEST_PROTOCOL)
