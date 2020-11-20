@@ -17,8 +17,8 @@ class App():
 
         window.title("AR Tracking Interface")
 
-        width = 800
-        height = 450
+        width = 500
+        height = 600
         pos_x = (window.winfo_screenwidth()/2) - (width/2)
         pos_y = (window.winfo_screenheight()/2) - (height/2)
         window.geometry('%dx%d+%d+%d' % (width, height, pos_x, pos_y))
@@ -33,25 +33,74 @@ class App():
         window.grid_rowconfigure(3, weight=1)
         window.grid_rowconfigure(4, weight=1)
         window.grid_columnconfigure(1, weight=1)
+        
+        self.video_source_frame = ttk.LabelFrame(
+            window, text="Video Source")
+        self.video_source_frame.grid(row=1, column=1, pady=5, padx=5)
+        self.video_source_frame.grid_columnconfigure(1, weight=1)
 
-        self.tracking_commands_frame = tk.Frame(window)
-        self.tracking_commands_frame.grid(row=1, column=1)
+        self.refresh_video_sources_button = tk.Button(
+            self.video_source_frame, text="Refresh Devices")
+        self.refresh_video_sources_button['command'] = self.refresh_video_sources
+        self.refresh_video_sources_button.grid(row=1, column=1, pady=5)
 
-        self.tracking_button = tk.Button(
-            self.tracking_commands_frame, text="Start Tracking", command=self.start_tracking)
-        self.tracking_button.grid(row=1, column=1)
+        self.video_source = ttk.Combobox(
+            self.video_source_frame, state="readonly", height=4, width=25)
+        self.video_source.bind('<<ComboboxSelected>>',
+                               self.video_source_init)
+        self.video_source.grid(row=2, column=1, padx=5, pady=5)
+
+        self.video_source_calibration_frame = ttk.LabelFrame(self.video_source_frame, text="Calibration")
+        self.video_source_calibration_frame.grid(row=3, column=1, padx=5, pady=5)
+        
+        self.video_source_calibration_status_frame = tk.Frame(self.video_source_calibration_frame)
+        self.video_source_calibration_status_frame.grid(row=1, column=1, padx=5, pady=5)
+
+        self.calibration_status_label = ttk.Label(
+            self.video_source_calibration_status_frame, text="Status:")
+        self.calibration_status_label.grid(row=1, column=1)
+        self.calibration_status = ttk.Label(self.video_source_calibration_status_frame)
+        self.calibration_status.grid(row=1, column=2)
+
+        self.calibration_chessboard_parameters_frame = tk.Frame(self.video_source_calibration_frame)
+        self.calibration_chessboard_parameters_frame.grid(row=2, column=1, padx=5)
+
+        self.calibration_config = VideoSourceCalibrationConfig.persisted()
+
+        self.chessboard_square_size = tk.DoubleVar()
+        self.chessboard_square_size.set(
+            self.calibration_config.chessboard_square_size)
+        self.chessboard_square_size_label = ttk.Label(
+            self.calibration_chessboard_parameters_frame, text="Chessboard square size:")
+        self.chessboard_square_size_label.grid(
+            row=1, column=1)
+        self.chessboard_square_size_entry = ttk.Entry(
+            self.calibration_chessboard_parameters_frame, width=5,
+            textvariable=self.chessboard_square_size)
+        self.chessboard_square_size_entry.grid(row=1, column=2)
+
+        self.calibration_buttons_frame = tk.Frame(self.video_source_calibration_frame)
+        self.calibration_buttons_frame.grid(row=3, column=1, pady = 5)
+
+        self.calibrate_button = tk.Button(
+            self.calibration_buttons_frame, text="Calibrate", command=self.calibrate)
+        self.calibrate_button.grid(row=1, column=1, padx = 5)
+
+        self.calibrate_button = tk.Button(
+            self.calibration_buttons_frame, text="Reset", command=self.reset_calibration)
+        self.calibrate_button.grid(row=1, column=2, padx = 5)
 
         self.configuration_frame = tk.Frame(window)
         self.configuration_frame.grid(
-            row=2, column=1, sticky=tk.E + tk.W + tk.N + tk.S)
+            row=2, column=1)
 
         self.configuration_frame.grid_columnconfigure(1, weight=1)
         self.configuration_frame.grid_columnconfigure(2, weight=1)
 
-        self.tracking_config_frame = ttk.LabelFrame(
-            self.configuration_frame, text="Tracking Configuration")
+        self.tracking_config_frame = tk.Frame(
+            self.configuration_frame)
         self.tracking_config_frame.grid(
-            row=1, column=1, sticky=tk.E + tk.W + tk.N + tk.S, pady=5, padx=5)
+            row=1, column=1, pady=5, padx=5)
 
         self.tracking_config_frame.grid_columnconfigure(1, weight=1)
         self.tracking_config_frame.grid_rowconfigure(1, weight=1)
@@ -60,16 +109,8 @@ class App():
 
         self.tracking_config = TrackingCofig.persisted()
 
-        self.show_video_frame = tk.Frame(self.tracking_config_frame)
-        self.show_video_frame.grid(row=1, column=1)
-        self.show_video = tk.BooleanVar()
-        self.show_video.set(self.tracking_config.show_video)
-        self.show_video_checkbox = tk.Checkbutton(
-            self.show_video_frame, text="Show video", variable=self.show_video)
-        self.show_video_checkbox.grid(row=1, column=1, pady=5)
-
         self.detection_mode_frame = tk.LabelFrame(self.tracking_config_frame, text="Detection Mode")
-        self.detection_mode_frame.grid(row=2, column=1, padx=5, pady=5)
+        self.detection_mode_frame.grid(row=1, column=1, padx=5, pady=5)
         
         self.single_marker_frame = ttk.LabelFrame(
             self.detection_mode_frame, text="Single Marker")
@@ -119,7 +160,6 @@ class App():
             row=1, column=2, padx=5, pady=5)
 
         self.marker_cube_mode = tk.BooleanVar()
-        # self.single_marker_mode.set(self.tracking_config.show_video)
         self.marker_cube_mode_checkbox = tk.Checkbutton(
             self.marker_cube_frame, variable=self.marker_cube_mode,
             command=self.marker_cube_settings_selection)
@@ -199,87 +239,16 @@ class App():
         self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(self.cube_id_selection.current())
         self.marker_cube_settings_set()
 
-        if self.tracking_config.marker_detection_settings.identifier == SINGLE_DETECTION:
+        if self.tracking_config.marker_detection_settings is None or self.tracking_config.marker_detection_settings.identifier == SINGLE_DETECTION:
             self.single_marker_mode.set(True)
             self.single_marker_settings_selection()
         elif self.tracking_config.marker_detection_settings.identifier == CUBE_DETECTION:
             self.marker_cube_mode.set(True)
             self.marker_cube_settings_selection()
 
-        self.video_source_frame = ttk.LabelFrame(
-            self.configuration_frame, text="Video Source")
-        self.video_source_frame.grid(
-            row=1, column=2, sticky=tk.E + tk.W + tk.N + tk.S, pady=5, padx=5)
-        self.video_source_frame.grid_columnconfigure(1, weight=1)
-
-        self.video_source_selection_frame = tk.Frame(self.video_source_frame)
-        self.video_source_selection_frame.grid(row=1, column=1)
-
-        self.video_source = ttk.Combobox(
-            self.video_source_selection_frame, state="readonly", height=4, width=25)
-        self.video_source.bind('<<ComboboxSelected>>',
-                               self.video_source_init)
-        self.video_source.grid(row=1, column=1)
-
-        self.refresh_video_sources_button = tk.Button(
-            self.video_source_selection_frame, text="Refresh")
-        self.refresh_video_sources_button['command'] = self.refresh_video_sources
-        self.refresh_video_sources_button.grid(row=1, column=3, padx=5)
-
-        self.calibration_status_frame = tk.Frame(self.video_source_frame)
-        self.calibration_status_frame.grid(row=2, column=1)
-        self.calibration_status_label = ttk.Label(
-            self.calibration_status_frame, text="Status:")
-        self.calibration_status_label.grid(row=1, column=1)
-        self.calibration_status = ttk.Label(self.calibration_status_frame)
-        self.calibration_status.grid(row=1, column=2)
-
-        self.calibration_frame = ttk.LabelFrame(
-            self.video_source_frame, text="Calibration")
-        self.calibration_frame.grid(
-            row=3, column=1, sticky=tk.E + tk.W + tk.N + tk.S, pady=5, padx=5)
-        self.calibration_frame.grid_columnconfigure(1, weight=1)
-
-        self.calibration_buttons_frame = tk.Frame(self.calibration_frame)
-        self.calibration_buttons_frame.grid(row=1, column=1, pady=5)
-
-        self.calibrate_button = tk.Button(
-            self.calibration_buttons_frame, text="Calibrate", command=self.calibrate)
-        self.calibrate_button.grid(row=1, column=1, padx=5)
-
-        self.capture_images_button = tk.Button(
-            self.calibration_buttons_frame, text="Capture Images", command=self.capture_images)
-        self.capture_images_button.grid(row=1, column=2, padx=5)
-
-        self.reset_button = tk.Button(
-            self.calibration_buttons_frame, text="Reset", command=self.reset)
-        self.reset_button.grid(row=1, column=3, padx=5)
-
-        self.calibration_image_count_label = ttk.Label(self.calibration_frame)
-        self.calibration_image_count_label.grid(row=2, column=1)
-
-        self.calibration_chessboard_parameters_frame = tk.Frame(
-            self.calibration_frame)
-        self.calibration_chessboard_parameters_frame.grid(
-            row=3, column=1, pady=5)
-
-        self.calibration_config = VideoSourceCalibrationConfig.persisted()
-
-        self.chessboard_square_size = tk.StringVar()
-        self.chessboard_square_size.set(
-            self.calibration_config.chessboard_square_size)
-        self.chessboard_square_size_label = ttk.Label(
-            self.calibration_chessboard_parameters_frame, text="Chessboard square size (cm):")
-        self.chessboard_square_size_label.grid(
-            row=1, column=1)
-        self.chessboard_square_size_entry = ttk.Entry(
-            self.calibration_chessboard_parameters_frame, width=5,
-            textvariable=self.chessboard_square_size)
-        self.chessboard_square_size_entry.grid(row=1, column=2)
-
         self.export_coordinates_frame = ttk.LabelFrame(
-            window, text="Coordinates Publish Server UDP")
-        self.export_coordinates_frame.grid(row=3, column=1, pady=5)
+            self.tracking_config_frame, text="Coordinates Publish Server UDP")
+        self.export_coordinates_frame.grid(row=2, column=1, pady=5)
 
         self.export_coordinates_input_frame = tk.Frame(
             self.export_coordinates_frame)
@@ -304,12 +273,15 @@ class App():
             self.export_coordinates_input_frame, textvariable=self.server_port, width=7)
         self.server_port_entry.grid(row=1, column=4)
 
-        self.utils_frame = tk.Frame(window)
-        self.utils_frame.grid(row=4, column=1, sticky=tk.S)
+        self.show_video = tk.BooleanVar()
+        self.show_video.set(self.tracking_config.show_video)
+        self.show_video_checkbox = tk.Checkbutton(
+            self.tracking_config_frame, text="Show video", variable=self.show_video)
+        self.show_video_checkbox.grid(row=4, column=1, pady=5)
 
-        self.save_button = ttk.Button(
-            self.utils_frame, text="Save", command=self.save)
-        self.save_button.grid(row=1, column=1)
+        self.tracking_button = tk.Button(
+            window, text="Start Tracking", command=self.start_tracking)
+        self.tracking_button.grid(row=4, column=1, sticky=tk.S)
 
         self.base_video_source_dir = '../assets/camera_calibration_data'
         self.base_cube_dir = '../assets/configs/marker_cubes'
@@ -319,7 +291,6 @@ class App():
         self.video_source_list = []
         self.refresh_video_sources()
         self.video_source_init()
-
 
     def single_marker_settings_selection(self):
         if self.single_marker_mode.get():
@@ -444,9 +415,8 @@ class App():
             self.video_source_list = video_device_listing.get_devices()
             self.video_source['values'] = self.video_source_list
             self.video_source.current(0)
-            self.capture_images_button['state'] = tk.ACTIVE
         except SystemError:
-            self.capture_images_button['state'] = tk.DISABLED
+            pass
 
     def start_tracking(self):
         self.save_tracking_config()
@@ -463,26 +433,18 @@ class App():
 
     def calibrate(self):
         self.save_calibration_config()
-        self.calibration.run_calibration()
+        self.calibration.calibrate()
         self.update_calibration_status()
 
-    def capture_images(self):
-        self.calibration.acquire_calibration_images()
-        self.update_calibration_images()
-
-    def reset(self):
-        self.calibration.delete_images()
+    def reset_calibration(self):
         self.calibration.delete_calibration()
         self.update_calibration_status()
-        self.update_calibration_images()
 
     def video_source_init(self, _=None):
         self.update_calibration_status()
 
         self.calibration = VideoSourceCalibration(
             self.get_video_source_dir(), self.video_source.current(), self.calibration_config)
-
-        self.update_calibration_images()
 
     def update_calibration_status(self):
         if(self.check_video_source_calibration()):
@@ -493,18 +455,6 @@ class App():
             self.tracking_button['state'] = tk.DISABLED
             self.calibration_status['text'] = "Not calibrated!"
             self.calibration_status['foreground'] = "red"
-
-    def update_calibration_images(self):
-        if self.calibration.calibration_image_count < 30:
-            self.calibrate_button['state'] = tk.DISABLED
-            self.calibration_image_count_label['text'] = "Calibration images count: {}\nMinimum: 30".format(
-                self.calibration.calibration_image_count)
-            self.calibration_image_count_label['foreground'] = "red"
-        else:
-            self.calibrate_button['state'] = tk.ACTIVE
-            self.calibration_image_count_label['text'] = "Calibration images count: {}".format(
-                self.calibration.calibration_image_count)
-            self.calibration_image_count_label['foreground'] = "green"
 
     def check_video_source_calibration(self):
         if not os.path.exists(self.get_video_source_dir()):
@@ -540,12 +490,7 @@ class App():
 
     def save_calibration_config(self):
         self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
-
         self.calibration_config.persist()
-
-    def save(self):
-        self.save_tracking_config()
-        self.save_calibration_config()
 
 
 if __name__ == "__main__":

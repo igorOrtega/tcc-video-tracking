@@ -317,7 +317,7 @@ class TrackingCofig:
                            tracking_config_data['server_port'],
                            tracking_config_data['marker_detection_settings'])
         except FileNotFoundError:
-            return cls(0, "", True, "", "", "")
+            return cls(0, "", True, "", "", None)
 
     def persist(self):
         # Overwrites any existing file.

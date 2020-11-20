@@ -19,79 +19,72 @@ class VideoSourceCalibration:
         self.__video_source_dir = video_source_dir
         self.__video_source = video_source
         self.__calibration_config = calibration_config
-        self.calibration_image_count = 0
 
-        self.__update_saved_image_count()
-
-    def acquire_calibration_images(self):
+    def calibrate(self):
         win_name = "Video Source Calibration Image Capture"
         cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty(
             win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-        video_capture = cv2.VideoCapture(self.__video_source, cv2.CAP_DSHOW)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        red = (0, 0, 255)
+        green = (0, 255, 0)
 
+        video_capture = cv2.VideoCapture(self.__video_source, cv2.CAP_DSHOW)
+        calibration_frames = []
+        ready_to_calibrate = False
+        start_calibration = False
+        status_color = red
         while True:
+            option = cv2.waitKey(1)
+
             _, frame = video_capture.read()
 
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 0.6
-            font_color = (0, 255, 0)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            cv2.putText(frame, "calibration image count: {}".format(
-                self.calibration_image_count), (0, 32), font, font_scale, font_color, 2, cv2.LINE_AA)
-            cv2.putText(frame, "S - Save Image ", (0, 64),
-                        font, font_scale, font_color, 2, cv2.LINE_AA)
-            cv2.putText(frame, "Q - Quit ", (0, 96), font,
-                        font_scale, font_color, 2, cv2.LINE_AA)
+            cv2.putText(frame, "calibration image count: {}. Minimum 40".format(len(calibration_frames)), (0, 20), font, font_scale, status_color, 2, cv2.LINE_AA)
+            
+            cv2.putText(frame, "ENTER - Capture frame for calibration", (0, 40),
+                        font, font_scale, green, 2, cv2.LINE_AA)
+
+            if option == 13:
+                found, _ = cv2.findChessboardCorners(gray, (9, 6), None)
+
+                if found:
+                    calibration_frames.append(gray)
+
+            if ready_to_calibrate:
+                cv2.putText(frame, "C - Start Calibration", (0, 60),
+                            font, font_scale, green, 2, cv2.LINE_AA)
+
+                if option == ord('c'):
+                    start_calibration = True
+                    cv2.putText(frame, "Running, this may take a while ...", (0, 80),
+                            font, font_scale, green, 2, cv2.LINE_AA)
+
+            cv2.putText(frame, "Q - Quit ", (0, 465), font,
+                        font_scale, green, 2, cv2.LINE_AA)
 
             cv2.imshow(win_name, frame)
-
-            key = cv2.waitKey(1)
-
-            if key == ord('s'):
-                self.__try_save_image(frame)
-
-            elif key == ord('q'):
+            
+            if start_calibration:
+                cv2.waitKey(2000)
+                self.__run(calibration_frames)
+                cv2.imshow(win_name, frame)
+                cv2.waitKey(1000)
                 video_capture.release()
                 cv2.destroyAllWindows()
                 break
 
-    def run_calibration(self):
-        objp = np.zeros((9*6, 3), np.float32)
-        objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)*float(
-            self.__calibration_config.chessboard_square_size)
+            if option == ord('q'):
+                video_capture.release()
+                cv2.destroyAllWindows()
+                break
 
-        objpoints = []
-        imgpoints = []
-
-        for image_path in glob.glob(self.__get_image_path('*')):
-            frame = cv2.imread(image_path)
-
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            found, corners = cv2.findChessboardCorners(gray, (9, 6), None)
-            if found:
-                objpoints.append(objp)
-                corners2 = cv2.cornerSubPix(
-                    gray, corners, (11, 11), (-1, -1), self.__criteria)
-                imgpoints.append(corners2)
-
-        ret_val, cam_mtx, dist, _, _ = cv2.calibrateCamera(
-            objpoints, imgpoints, gray.shape[::-1], None, None)
-
-        if ret_val:
-            np.save('{}/cam_mtx.npy'.format(self.__video_source_dir), cam_mtx)
-            np.save('{}/dist.npy'.format(self.__video_source_dir), dist)
-
-    def delete_images(self):
-        paths = glob.glob(self.__get_image_path('*'))
-        for image_path in paths:
-            os.remove(image_path)
-
-        if os.path.exists(self.__get_images_dir()):
-            os.rmdir(self.__get_images_dir())
-
-        self.calibration_image_count = 0
+            if len(calibration_frames) >= 30:
+                ready_to_calibrate = True
+                status_color = green
 
     def delete_calibration(self):
         if os.path.isfile('{}/cam_mtx.npy'.format(self.__video_source_dir)):
@@ -100,30 +93,32 @@ class VideoSourceCalibration:
         if os.path.isfile('{}/dist.npy'.format(self.__video_source_dir)):
             os.remove('{}/dist.npy'.format(self.__video_source_dir))
 
-    def __update_saved_image_count(self):
-        paths = glob.glob(self.__get_image_path('*'))
-        self.calibration_image_count = len(paths)
+    def __run(self, calibration_frames):
+        objp = np.zeros((9*6, 3), np.float32)
+        objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)*float(
+            self.__calibration_config.chessboard_square_size)
 
-    def __get_image_path(self, img_name):
-        return '{}/{}.jpg'.format(self.__get_images_dir(), img_name)
+        objpoints = []
+        imgpoints = []
 
-    def __get_images_dir(self):
-        return '{}/calibration_images'.format(self.__video_source_dir)
+        img_size = calibration_frames[0].shape[::-1]
+        for frame in calibration_frames:
+            found, corners = cv2.findChessboardCorners(frame, (9, 6), None)
+            if found:
+                objpoints.append(objp)
+                corners2 = cv2.cornerSubPix(
+                    frame, corners, (11, 11), (-1, -1), self.__criteria)
+                imgpoints.append(corners2)
 
-    def __try_save_image(self, frame):
-        if not os.path.exists(self.__get_images_dir()):
-            os.makedirs(self.__get_images_dir())
+        ret_val, cam_mtx, dist, _, _ = cv2.calibrateCamera(
+            objpoints, imgpoints, img_size, None, None)
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if ret_val:
+            if not os.path.exists(self.__video_source_dir):
+                os.makedirs(self.__video_source_dir)
 
-        # only saves images with chessboard
-        found, _ = cv2.findChessboardCorners(gray, (9, 6), None)
-
-        if found:
-            self.calibration_image_count = self.calibration_image_count + 1
-            save_path = self.__get_image_path(
-                str(self.calibration_image_count))
-            cv2.imwrite(save_path, gray)
+            np.save('{}/cam_mtx.npy'.format(self.__video_source_dir), cam_mtx)
+            np.save('{}/dist.npy'.format(self.__video_source_dir), dist)
 
 class VideoSourceCalibrationConfig:
 
