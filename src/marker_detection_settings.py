@@ -210,7 +210,8 @@ class MarkerCubeMapping:
 
     def __detect_markers(self, frame):
         parameters = aruco.DetectorParameters_create()
-        parameters.adaptiveThreshConstant = 10
+        parameters.adaptiveThreshConstant = 7
+        parameters.cornerRefinementMethod = aruco.CORNER_REFINE_CONTOUR
 
         corners, ids, _ = aruco.detectMarkers(
             cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
