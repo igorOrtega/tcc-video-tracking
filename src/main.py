@@ -33,7 +33,7 @@ class App():
         window.grid_rowconfigure(3, weight=1)
         window.grid_rowconfigure(4, weight=1)
         window.grid_columnconfigure(1, weight=1)
-        
+
         self.video_source_frame = ttk.LabelFrame(
             window, text="Video Source")
         self.video_source_frame.grid(row=1, column=1, pady=5, padx=5)
@@ -50,20 +50,27 @@ class App():
                                self.video_source_init)
         self.video_source.grid(row=2, column=1, padx=5, pady=5)
 
-        self.video_source_calibration_frame = ttk.LabelFrame(self.video_source_frame, text="Calibration")
-        self.video_source_calibration_frame.grid(row=3, column=1, padx=5, pady=5)
-        
-        self.video_source_calibration_status_frame = tk.Frame(self.video_source_calibration_frame)
-        self.video_source_calibration_status_frame.grid(row=1, column=1, padx=5, pady=5)
+        self.video_source_calibration_frame = ttk.LabelFrame(
+            self.video_source_frame, text="Calibration")
+        self.video_source_calibration_frame.grid(
+            row=3, column=1, padx=5, pady=5)
+
+        self.video_source_calibration_status_frame = tk.Frame(
+            self.video_source_calibration_frame)
+        self.video_source_calibration_status_frame.grid(
+            row=1, column=1, padx=5, pady=5)
 
         self.calibration_status_label = ttk.Label(
             self.video_source_calibration_status_frame, text="Status:")
         self.calibration_status_label.grid(row=1, column=1)
-        self.calibration_status = ttk.Label(self.video_source_calibration_status_frame)
+        self.calibration_status = ttk.Label(
+            self.video_source_calibration_status_frame)
         self.calibration_status.grid(row=1, column=2)
 
-        self.calibration_chessboard_parameters_frame = tk.Frame(self.video_source_calibration_frame)
-        self.calibration_chessboard_parameters_frame.grid(row=2, column=1, padx=5)
+        self.calibration_chessboard_parameters_frame = tk.Frame(
+            self.video_source_calibration_frame)
+        self.calibration_chessboard_parameters_frame.grid(
+            row=2, column=1, padx=5)
 
         self.calibration_config = VideoSourceCalibrationConfig.persisted()
 
@@ -79,16 +86,17 @@ class App():
             textvariable=self.chessboard_square_size)
         self.chessboard_square_size_entry.grid(row=1, column=2)
 
-        self.calibration_buttons_frame = tk.Frame(self.video_source_calibration_frame)
-        self.calibration_buttons_frame.grid(row=3, column=1, pady = 5)
+        self.calibration_buttons_frame = tk.Frame(
+            self.video_source_calibration_frame)
+        self.calibration_buttons_frame.grid(row=3, column=1, pady=5)
 
         self.calibrate_button = tk.Button(
             self.calibration_buttons_frame, text="Calibrate", command=self.calibrate)
-        self.calibrate_button.grid(row=1, column=1, padx = 5)
+        self.calibrate_button.grid(row=1, column=1, padx=5)
 
         self.calibrate_button = tk.Button(
             self.calibration_buttons_frame, text="Reset", command=self.reset_calibration)
-        self.calibrate_button.grid(row=1, column=2, padx = 5)
+        self.calibrate_button.grid(row=1, column=2, padx=5)
 
         self.configuration_frame = tk.Frame(window)
         self.configuration_frame.grid(
@@ -109,9 +117,10 @@ class App():
 
         self.tracking_config = TrackingCofig.persisted()
 
-        self.detection_mode_frame = tk.LabelFrame(self.tracking_config_frame, text="Detection Mode")
+        self.detection_mode_frame = tk.LabelFrame(
+            self.tracking_config_frame, text="Detection Mode")
         self.detection_mode_frame.grid(row=1, column=1, padx=5, pady=5)
-        
+
         self.single_marker_frame = ttk.LabelFrame(
             self.detection_mode_frame, text="Single Marker")
         self.single_marker_frame.grid(
@@ -151,7 +160,8 @@ class App():
         self.single_marker_buttons_frame.grid(
             row=3, column=1, padx=5, pady=5)
 
-        self.single_marker_save_button = tk.Button(self.single_marker_buttons_frame,text="Save", command=self.single_marker_save)
+        self.single_marker_save_button = tk.Button(
+            self.single_marker_buttons_frame, text="Save", command=self.single_marker_save)
         self.single_marker_save_button.grid(row=1, column=1)
 
         self.marker_cube_frame = ttk.LabelFrame(
@@ -171,10 +181,11 @@ class App():
         self.cube_id_selection = ttk.Combobox(
             self.cube_id_frame, state="normal", height=4, width=15)
         self.cube_id_selection.bind('<<ComboboxSelected>>',
-                               self.cube_id_selected)
+                                    self.cube_id_selected)
         self.cube_id_selection.grid(row=1, column=1)
 
-        self.new_cube_id_button = tk.Button(self.cube_id_frame,text="New", command=self.add_cube_id)
+        self.new_cube_id_button = tk.Button(
+            self.cube_id_frame, text="New", command=self.add_cube_id)
         self.new_cube_id_button.grid(row=1, column=2, padx=5)
 
         self.marker_cube_settings_frame = tk.Frame(
@@ -182,14 +193,14 @@ class App():
         self.marker_cube_settings_frame.grid(
             row=3, column=1, padx=5, pady=5)
 
-        self.cube_main_marker_id = tk.IntVar()
-        self.cube_main_marker_id_label = ttk.Label(
+        self.cube_up_marker_id = tk.IntVar()
+        self.cube_up_marker_id_label = ttk.Label(
             self.marker_cube_settings_frame, text="Up Marker ID:")
-        self.cube_main_marker_id_label.grid(
+        self.cube_up_marker_id_label.grid(
             row=1, column=1, sticky=tk.W + tk.N)
-        self.cube_main_marker_id_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_main_marker_id, width=5)
-        self.cube_main_marker_id_entry.grid(row=1, column=2, sticky=tk.W)
+        self.cube_up_marker_id_entry = ttk.Entry(
+            self.marker_cube_settings_frame, textvariable=self.cube_up_marker_id, width=5)
+        self.cube_up_marker_id_entry.grid(row=1, column=2, sticky=tk.W)
 
         self.cube_side_marker_ids_label = ttk.Label(
             self.marker_cube_settings_frame, text="Side Marker IDS:")
@@ -213,30 +224,42 @@ class App():
             self.marker_cube_settings_frame, textvariable=self.cube_side_marker_4, width=5)
         self.cube_side_marker_4_entry.grid(row=2, column=5, sticky=tk.W)
 
+        self.cube_down_marker_id = tk.IntVar()
+        self.cube_down_marker_id_label = ttk.Label(
+            self.marker_cube_settings_frame, text="Down Marker ID:")
+        self.cube_down_marker_id_label.grid(
+            row=3, column=1, sticky=tk.W + tk.N)
+        self.cube_down_marker_id_entry = ttk.Entry(
+            self.marker_cube_settings_frame, textvariable=self.cube_down_marker_id, width=5)
+        self.cube_down_marker_id_entry.grid(row=3, column=2, sticky=tk.W)
+
         self.cube_markers_length = tk.DoubleVar()
         self.cube_markers_length_label = ttk.Label(
             self.marker_cube_settings_frame, text="Markers length:")
         self.cube_markers_length_label.grid(
-            row=3, column=1, pady=5)
+            row=4, column=1, pady=5)
         self.cube_markers_length_entry = ttk.Entry(
             self.marker_cube_settings_frame, textvariable=self.cube_markers_length, width=5)
-        self.cube_markers_length_entry.grid(row=3, column=2, sticky=tk.W)
+        self.cube_markers_length_entry.grid(row=4, column=2, sticky=tk.W)
 
         self.marker_cube_buttons_frame = tk.Frame(
             self.marker_cube_frame)
         self.marker_cube_buttons_frame.grid(
             row=4, column=1, padx=5, pady=5)
 
-        self.marker_cube_id_map_button = tk.Button(self.marker_cube_buttons_frame,text="Map and Save", command=self.marker_cube_map)
+        self.marker_cube_id_map_button = tk.Button(
+            self.marker_cube_buttons_frame, text="Map and Save", command=self.marker_cube_map)
         self.marker_cube_id_map_button.grid(row=1, column=1, padx=5)
 
-        self.marker_cube_id_delete_button = tk.Button(self.marker_cube_buttons_frame,text="Delete", command=self.marker_cube_delete)
+        self.marker_cube_id_delete_button = tk.Button(
+            self.marker_cube_buttons_frame, text="Delete", command=self.marker_cube_delete)
         self.marker_cube_id_delete_button.grid(row=1, column=2, padx=5)
 
         self.single_marker_settings = SingleMarkerDetectionSettings.persisted()
         self.single_marker_settings_set()
 
-        self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(self.cube_id_selection.current())
+        self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
+            self.cube_id_selection.current())
         self.marker_cube_settings_set()
 
         if self.tracking_config.marker_detection_settings is None or self.tracking_config.marker_detection_settings.identifier == SINGLE_DETECTION:
@@ -314,7 +337,8 @@ class App():
             self.single_marker_mode.set(True)
 
     def single_marker_settings_set(self):
-        self.single_marker_length.set(self.single_marker_settings.marker_length)
+        self.single_marker_length.set(
+            self.single_marker_settings.marker_length)
         self.single_marker_id.set(self.single_marker_settings.marker_id)
 
     def single_marker_save(self):
@@ -348,16 +372,18 @@ class App():
             self.cube_ids.append(cube_id.split(".")[0])
 
         self.cube_id_selection['values'] = self.cube_ids
-        
+
         if len(self.cube_ids) > 0:
             self.cube_id_selection.current(0)
-            self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(self.cube_id_selection.get())
+            self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
+                self.cube_id_selection.get())
             self.marker_cube_settings_set()
         else:
             self.cube_id_selection.set("")
 
     def cube_id_selected(self, _=None):
-        self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(self.cube_id_selection.get())
+        self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
+            self.cube_id_selection.get())
         self.marker_cube_settings_set()
         self.cube_id_selection['state'] = 'readonly'
 
@@ -372,42 +398,54 @@ class App():
         self.cube_id_selection['state'] = 'normal'
 
     def marker_cube_settings_set(self):
-        self.cube_main_marker_id.set(self.marker_cube_settings.main_marker_id)
-        self.cube_side_marker_1.set(self.marker_cube_settings.other_marker_ids[0])
-        self.cube_side_marker_2.set(self.marker_cube_settings.other_marker_ids[1])
-        self.cube_side_marker_3.set(self.marker_cube_settings.other_marker_ids[2])
-        self.cube_side_marker_4.set(self.marker_cube_settings.other_marker_ids[3])
+        self.cube_up_marker_id.set(self.marker_cube_settings.up_marker_id)
+        self.cube_side_marker_1.set(
+            self.marker_cube_settings.side_marker_ids[0])
+        self.cube_side_marker_2.set(
+            self.marker_cube_settings.side_marker_ids[1])
+        self.cube_side_marker_3.set(
+            self.marker_cube_settings.side_marker_ids[2])
+        self.cube_side_marker_4.set(
+            self.marker_cube_settings.side_marker_ids[3])
+        self.cube_down_marker_id.set(self.marker_cube_settings.down_marker_id)
         self.cube_markers_length.set(self.marker_cube_settings.markers_length)
 
     def marker_cube_map(self):
-        detection = MarkerCubeMapping(self.cube_id_selection.get(),self.get_video_source_dir(),self.video_source.current(),
-            self.cube_markers_length.get(), self.cube_main_marker_id.get(),
-            [self.cube_side_marker_1.get(), self.cube_side_marker_2.get(), self.cube_side_marker_3.get(), self.cube_side_marker_4.get()])
+        detection = MarkerCubeMapping(self.cube_id_selection.get(), self.get_video_source_dir(), self.video_source.current(),
+                                      self.cube_markers_length.get(), self.cube_up_marker_id.get(),
+                                      [self.cube_side_marker_1.get(), self.cube_side_marker_2.get(
+                                      ), self.cube_side_marker_3.get(), self.cube_side_marker_4.get()],
+                                      self.cube_down_marker_id.get())
 
         detection.map()
-        self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(self.cube_id_selection.get())
+        self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
+            self.cube_id_selection.get())
         self.cube_id_selection['state'] = 'readonly'
 
         if not self.cube_ids.__contains__(self.cube_id_selection.get()):
             self.cube_ids.append(self.cube_id_selection.get())
-            self.cube_ids.remove("")
+
+            if self.cube_ids.__contains__(""):
+                self.cube_ids.remove("")
+
             self.cube_id_selection['values'] = self.cube_ids
 
     def marker_cube_delete(self):
-        filename = '../assets/configs/marker_cubes/{}.pkl'.format(self.cube_id_selection.get())
-        if  os.path.isfile(filename):
+        filename = '../assets/configs/marker_cubes/{}.pkl'.format(
+            self.cube_id_selection.get())
+        if os.path.isfile(filename):
             os.remove(filename)
 
         if self.cube_ids.__contains__(self.cube_id_selection.get()):
             self.cube_ids.remove(self.cube_id_selection.get())
             self.cube_id_selection['values'] = self.cube_ids
-        
+
         if len(self.cube_ids) > 0:
             self.cube_id_selection.current(0)
             self.marker_cube_settings_set()
         else:
             self.cube_id_selection.set("")
-        
+
         self.cube_id_selected()
 
     def refresh_video_sources(self):
@@ -477,7 +515,7 @@ class App():
         self.tracking_config.show_video = self.show_video.get()
         self.tracking_config.server_ip = self.server_ip.get()
         self.tracking_config.server_port = self.server_port.get()
-        
+
         marker_detection_settings = None
         if self.single_marker_mode.get():
             marker_detection_settings = self.single_marker_settings

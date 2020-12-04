@@ -79,7 +79,8 @@ class Tracking:
             elif self.__marker_detection_settings.identifier == CUBE_DETECTION:
                 detection_result = self.__markers_cube_detection(frame)
             else:
-                raise Exception("Invalid detection identifier. Received: {}".format(self.__marker_detection_settings.identifier))
+                raise Exception("Invalid detection identifier. Received: {}".format(
+                    self.__marker_detection_settings.identifier))
 
             self.__publish_coordinates(json.dumps(detection_result))
 
@@ -138,7 +139,7 @@ class Tracking:
                     choosen_marker_id = ids[i][0]
                     choosen_marker_index = i
 
-            if choosen_marker_id == self.__marker_detection_settings.main_marker_id:
+            if choosen_marker_id == self.__marker_detection_settings.up_marker_id:
                 main_marker_rvec = rvecs[choosen_marker_index]
                 main_marker_tvec = tvecs[choosen_marker_index]
             else:
@@ -170,7 +171,7 @@ class Tracking:
                 main_marker_rvec = rvec_t.T
 
             aruco.drawAxis(frame, cam_mtx, dist,
-                               main_marker_rvec, main_marker_tvec, 5)
+                           main_marker_rvec, main_marker_tvec, 5)
 
         return self.__detection_result(main_marker_rvec, main_marker_tvec)
 

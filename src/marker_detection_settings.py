@@ -4,6 +4,7 @@ except ModuleNotFoundError:
     import pickle
 
 import os
+import statistics
 import cv2
 import numpy as np
 import cv2.aruco as aruco
@@ -44,11 +45,12 @@ class SingleMarkerDetectionSettings():
 
 class MarkersCubeDetectionSettings():
 
-    def __init__(self, markers_length, main_marker_id, other_marker_ids, transformations):
+    def __init__(self, markers_length, up_marker_id, side_marker_ids, down_marker_id, transformations):
         self.identifier = CUBE_DETECTION
         self.markers_length = markers_length
-        self.main_marker_id = main_marker_id
-        self.other_marker_ids = other_marker_ids
+        self.up_marker_id = up_marker_id
+        self.side_marker_ids = side_marker_ids
+        self.down_marker_id = down_marker_id
         self.transformations = transformations
 
     def persist(self, cube_id):
@@ -56,8 +58,9 @@ class MarkersCubeDetectionSettings():
         with open('../assets/configs/marker_cubes/{}.pkl'.format(cube_id), 'wb+') as output:
             pickle.dump({
                 'markers_length': self.markers_length,
-                'main_marker_id': self.main_marker_id,
-                'other_marker_ids': self.other_marker_ids,
+                'up_marker_id': self.up_marker_id,
+                'side_marker_ids': self.side_marker_ids,
+                'down_marker_id': self.down_marker_id,
                 'transformations': self.transformations}, output, pickle.HIGHEST_PROTOCOL)
 
     @classmethod
@@ -70,30 +73,34 @@ class MarkersCubeDetectionSettings():
                 settings = pickle.load(file)
 
                 return cls(settings['markers_length'],
-                           settings['main_marker_id'],
-                           settings['other_marker_ids'],
+                           settings['up_marker_id'],
+                           settings['side_marker_ids'],
+                           settings['down_marker_id'],
                            settings['transformations'])
 
         except FileNotFoundError:
-            return cls("", "", ["", "", "", ""], None)
+            return cls("", "", ["", "", "", ""], "", None)
 
 
 class MarkerCubeMapping:
 
-    def __init__(self, cube_id, video_source_dir, video_source, markers_length, main_marker_id, other_ids):
+    def __init__(self, cube_id, video_source_dir, video_source, markers_length, up_marker_id, side_marker_ids, down_marker_id):
         self.__cube_id = cube_id
         self.__video_source_dir = video_source_dir
         self.__video_source = video_source
         self.__markers_length = markers_length
-        self.__main_marker_id = main_marker_id
-        self.__other_ids = other_ids
+        self.__up_marker_id = up_marker_id
+        self.__side_marker_ids = side_marker_ids
+        self.__down_marker_id = down_marker_id
 
-        self.__acquire_min_count = 10
+        self.__acquire_min_count = 200
 
     def map(self):
-        transformations = {}
-        for other_id in self.__other_ids:
-            transformations[other_id] = []
+        side_up_transformations = {}
+        down_side_transformations = {}
+        for side_marker_id in self.__side_marker_ids:
+            side_up_transformations[side_marker_id] = []
+            down_side_transformations[side_marker_id] = []
 
         cam_mtx = np.load(
             "{}/cam_mtx.npy".format(self.__video_source_dir))
@@ -109,12 +116,14 @@ class MarkerCubeMapping:
 
         while True:
             _, frame = video_capture.read()
-            option = cv2.waitKey(1)
 
             done = True
-            for other_id in self.__other_ids:
-                done &= len(transformations[other_id]
-                            ) == self.__acquire_min_count
+            for side_marker_id in self.__side_marker_ids:
+                done &= len(
+                    side_up_transformations[side_marker_id]) == self.__acquire_min_count
+
+                done &= len(
+                    down_side_transformations[side_marker_id]) == self.__acquire_min_count
 
             if not done:
                 corners, ids = self.__detect_markers(frame)
@@ -126,76 +135,82 @@ class MarkerCubeMapping:
                 green = (0, 255, 0)
 
                 if np.all(ids is not None):
+                    rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
+                        corners, float(self.__markers_length), cam_mtx, dist)
 
-                    if ids.size <= 2:
-
-                        main_marker_index = None
-                        other_marker_index = None
-                        for i in range(0, ids.size):
-                            if ids[i][0] == self.__main_marker_id:
-                                main_marker_index = i
-                            else:
-                                other_marker_index = i
-
-                        if main_marker_index is None:
-                            cv2.putText(frame, "Cannot detect main marker!",
-                                        (0, 20), font, scale, blue, 2, cv2.LINE_AA)
-                        elif other_marker_index is None:
-                            cv2.putText(frame, "Only main marker detected!",
-                                        (0, 20), font, scale, blue, 2, cv2.LINE_AA)
+                    up_marker_index = None
+                    down_marker_index = None
+                    side_marker_index = None
+                    for i in range(0, ids.size):
+                        if ids[i][0] == self.__up_marker_id:
+                            up_marker_index = i
+                        elif ids[i][0] == self.__down_marker_id:
+                            down_marker_index = i
+                        elif side_marker_index is None or tvecs[side_marker_index][0][2] > tvecs[i][0][2]:
+                            side_marker_index = i
                         else:
-                            rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
-                                corners, float(self.__markers_length), cam_mtx, dist)
+                            pass
 
-                            cv2.putText(frame, "marker {} (main) -> marker {} mapping".format(
-                                ids[main_marker_index][0], ids[other_marker_index][0]), (0, 20), font, scale, blue, 2, cv2.LINE_AA)
+                    target_marker_index = None
+                    other_marker_index = None
+                    destination_index = None
+                    transformation_destination = None
+                    if up_marker_index is not None and side_marker_index is not None:
+                        target_marker_index = up_marker_index
+                        other_marker_index = side_marker_index
+                        destination_index = side_marker_index
+                        transformation_destination = side_up_transformations
+                    elif down_marker_index is not None and side_marker_index is not None:
+                        target_marker_index = side_marker_index
+                        other_marker_index = down_marker_index
+                        destination_index = side_marker_index
+                        transformation_destination = down_side_transformations
 
-                            acquired_transformations_count = len(
-                                transformations[ids[other_marker_index][0]])
-                            if acquired_transformations_count < self.__acquire_min_count:
-                                cv2.putText(frame, "Press 'ENTER' {} times, in diffetent angles".format(
-                                    self.__acquire_min_count), (0, 40), font, scale, blue, 2, cv2.LINE_AA)
-                                cv2.putText(frame, "Count: {}".format(
-                                    acquired_transformations_count), (0, 60), font, scale, red, 2, cv2.LINE_AA)
+                    if target_marker_index is not None and other_marker_index is not None and destination_index is not None and transformation_destination is not None:
+                        cv2.putText(frame, "marker {} -> marker {} mapping".format(
+                            ids[other_marker_index][0], ids[target_marker_index][0]), (0, 20), font, scale, blue, 2, cv2.LINE_AA)
 
-                                # enter
-                                if option == 13:
-                                    main_marker_transformation = self.__get_transformation_matrix(
-                                        rvecs[main_marker_index], tvecs[main_marker_index])
-                                    other_marker_transformation = self.__get_transformation_matrix(
-                                        rvecs[other_marker_index], tvecs[other_marker_index])
+                        acquired_transformations_count = len(
+                            transformation_destination[ids[destination_index][0]])
+                        if acquired_transformations_count < self.__acquire_min_count:
+                            cv2.putText(frame, "Count: {}".format(
+                                acquired_transformations_count), (0, 40), font, scale, red, 2, cv2.LINE_AA)
 
-                                    transformation_other_to_main = np.dot(np.linalg.inv(
-                                        main_marker_transformation), other_marker_transformation)
-                                    transformations[ids[other_marker_index][0]].append(
-                                        transformation_other_to_main)
+                            target_marker_transformation = self.__get_transformation_matrix(
+                                rvecs[target_marker_index], tvecs[target_marker_index])
+                            other_marker_transformation = self.__get_transformation_matrix(
+                                rvecs[other_marker_index], tvecs[other_marker_index])
+                            transformation_other_to_target = np.dot(np.linalg.inv(
+                                target_marker_transformation), other_marker_transformation)
 
-                            else:
-                                cv2.putText(frame, "Done!", (0, 40),
-                                            font, scale, green, 2, cv2.LINE_AA)
+                            acquire = {}
+                            acquire["target"] = target_marker_transformation
+                            acquire["other"] = other_marker_transformation
+                            acquire["other_to_target"] = transformation_other_to_target
+                            transformation_destination[ids[destination_index][0]].append(
+                                acquire)
 
-                    else:
-                        cv2.putText(frame, "Too many markers detected!", (0, 20), font,
-                                    scale, blue, 2, cv2.LINE_AA)
-                else:
-                    cv2.putText(frame, "No markers detected!", (0, 20), font,
-                                scale, blue, 2, cv2.LINE_AA)
+                        else:
+                            cv2.putText(frame, "Done!", (0, 40),
+                                        font, scale, green, 2, cv2.LINE_AA)
 
                 cv2.putText(frame, "Q - Quit ", (0, 465), font,
                             scale, blue, 2, cv2.LINE_AA)
+
+                cv2.imshow(win_name, frame)
+
             else:
                 cv2.putText(frame, "Markers cube mapping finished, saving ...", (0, 40), font,
                             scale, green, 2, cv2.LINE_AA)
 
-            cv2.imshow(win_name, frame)
+                cv2.imshow(win_name, frame)
+                cv2.waitKey(1000)
 
-            if done:
-                for other_id in self.__other_ids:
-                    transformations[other_id] = self.__mean_transformation(
-                        transformations[other_id])
+                transformations = self.__compute_transformations(
+                    side_up_transformations, down_side_transformations)
 
                 settings = MarkersCubeDetectionSettings(
-                    self.__markers_length, self.__main_marker_id, self.__other_ids, transformations)
+                    self.__markers_length, self.__up_marker_id, self.__side_marker_ids, self.__down_marker_id, transformations)
                 settings.persist(self.__cube_id)
 
                 cv2.waitKey(1000)
@@ -203,7 +218,8 @@ class MarkerCubeMapping:
                 cv2.destroyAllWindows()
                 break
 
-            if option == ord('q'):
+            pressed_key = cv2.waitKey(1)
+            if pressed_key == ord('q'):
                 video_capture.release()
                 cv2.destroyAllWindows()
                 break
@@ -233,17 +249,54 @@ class MarkerCubeMapping:
 
         return transformation
 
-    def __mean_transformation(self, transformations):
-        result = np.zeros(shape=(4, 4))
-        rows_count, cols_count = result.shape
+    def __compute_transformations(self, side_up_transformations, down_side_transformations):
+        transformations = {}
+        side_up_transformation_errors = {}
 
-        for transformation in transformations:
-            for row in range(0, rows_count):
-                for col in range(0, cols_count):
-                    result[row][col] += transformation[row][col]
+        for side_marker_id in self.__side_marker_ids:
+            best_transformation, error = self.__find_best_transformation(
+                side_up_transformations[side_marker_id])
 
-        for row in range(0, rows_count):
-            for col in range(0, cols_count):
-                result[row][col] /= self.__acquire_min_count
+            transformations[side_marker_id] = best_transformation
+            side_up_transformation_errors[side_marker_id] = error
 
-        return result
+        best_down_up_transformation = np.zeros(shape=(4, 4))
+        min_error = None
+        for side_marker_id in self.__side_marker_ids:
+            best_down_side_transformation, error = self.__find_best_transformation(
+                down_side_transformations[side_marker_id])
+
+            if min_error is None or min_error > side_up_transformation_errors[side_marker_id] + error:
+                best_down_up_transformation = np.dot(
+                    transformations[side_marker_id], best_down_side_transformation)
+                min_error = side_up_transformation_errors[side_marker_id] + error
+
+        transformations[self.__down_marker_id] = best_down_up_transformation
+
+        return transformations
+
+    def __find_best_transformation(self, transformations):
+        best_transformation = np.zeros(shape=(4, 4))
+        rows_count, cols_count = best_transformation.shape
+        min_error = None
+
+        for testing_transformation in transformations:
+            local_errors = []
+            for transformation in transformations:
+                local_error = 0
+                calculated_result = np.linalg.inv(
+                    np.dot(testing_transformation["other_to_target"], np.linalg.inv(transformation["other"])))
+
+                for row in range(0, rows_count):
+                    for col in range(0, cols_count):
+                        local_error += (transformation["target"][row][col] -
+                                        calculated_result[row][col])**2
+
+                local_errors.append(local_error)
+
+            local_errors_mean = statistics.mean(local_errors)
+            if min_error is None or min_error > local_errors_mean:
+                best_transformation = testing_transformation["other_to_target"]
+                min_error = local_errors_mean
+
+        return best_transformation, min_error
