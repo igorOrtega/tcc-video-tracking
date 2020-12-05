@@ -32,6 +32,10 @@ class VideoSourceCalibration:
         green = (0, 255, 0)
 
         video_capture = cv2.VideoCapture(self.__video_source, cv2.CAP_DSHOW)
+
+        video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
         calibration_frames = []
         ready_to_calibrate = False
         start_calibration = False

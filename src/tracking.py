@@ -70,6 +70,9 @@ class Tracking:
         video_capture = cv2.VideoCapture(
             self.__device_number, cv2.CAP_DSHOW)
 
+        video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
         while True:
             _, frame = video_capture.read()
 
