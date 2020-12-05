@@ -43,8 +43,9 @@ class VideoSourceCalibration:
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            cv2.putText(frame, "calibration image count: {}. Minimum 40".format(len(calibration_frames)), (0, 20), font, font_scale, status_color, 2, cv2.LINE_AA)
-            
+            cv2.putText(frame, "calibration image count: {}. Minimum 50".format(
+                len(calibration_frames)), (0, 20), font, font_scale, status_color, 2, cv2.LINE_AA)
+
             cv2.putText(frame, "ENTER - Capture frame for calibration", (0, 40),
                         font, font_scale, green, 2, cv2.LINE_AA)
 
@@ -82,7 +83,7 @@ class VideoSourceCalibration:
                 cv2.destroyAllWindows()
                 break
 
-            if len(calibration_frames) >= 30:
+            if len(calibration_frames) >= 50:
                 ready_to_calibrate = True
                 status_color = green
 
