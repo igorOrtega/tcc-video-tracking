@@ -196,7 +196,7 @@ class MarkerCubeMapping:
                             cv2.putText(frame, "Done!", (0, 40),
                                         font, scale, green, 2, cv2.LINE_AA)
 
-                cv2.putText(frame, "Q - Quit ", (0, 465), font,
+                cv2.putText(frame, "Q - Quit ", (0, 700), font,
                             scale, blue, 2, cv2.LINE_AA)
 
                 cv2.imshow(win_name, frame)

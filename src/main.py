@@ -279,7 +279,7 @@ class App():
         self.translation_offset_x = tk.DoubleVar()
         self.translation_offset_x.set(initial_translation_offset_x)
         self.translation_offset_x_label = ttk.Label(
-            self.translation_offset_frame, text="X")
+            self.translation_offset_frame, text="X", foreground="red")
         self.translation_offset_x_label.grid(row=1, column=1, pady=5)
         self.translation_offset_x_entry = ttk.Entry(
             self.translation_offset_frame, textvariable=self.translation_offset_x, width=5)
@@ -292,7 +292,7 @@ class App():
         self.translation_offset_y = tk.DoubleVar()
         self.translation_offset_y.set(initial_translation_offset_y)
         self.translation_offset_y_label = ttk.Label(
-            self.translation_offset_frame, text="Y")
+            self.translation_offset_frame, text="Y", foreground="green")
         self.translation_offset_y_label.grid(row=1, column=3, pady=5)
         self.translation_offset_y_entry = ttk.Entry(
             self.translation_offset_frame, textvariable=self.translation_offset_y, width=5)
@@ -305,7 +305,7 @@ class App():
         self.translation_offset_z = tk.DoubleVar()
         self.translation_offset_z.set(initial_translation_offset_z)
         self.translation_offset_z_label = ttk.Label(
-            self.translation_offset_frame, text="Z")
+            self.translation_offset_frame, text="Z", foreground="blue")
         self.translation_offset_z_label.grid(row=1, column=5, pady=5)
         self.translation_offset_z_entry = ttk.Entry(
             self.translation_offset_frame, textvariable=self.translation_offset_z, width=5)

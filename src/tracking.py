@@ -292,7 +292,7 @@ class Tracking:
             cv2.putText(frame, 'rotation_forward_z: {:.2f}'.format(detection_result['rotation_forward_z']), (0, 280),
                         font, font_scale, font_color, 2, cv2.LINE_AA)
 
-        cv2.putText(frame, "Q - Quit ", (0, 465), font,
+        cv2.putText(frame, "Q - Quit ", (0, 700), font,
                     font_scale, font_color, 2, cv2.LINE_AA)
 
         cv2.imshow(win_name, frame)

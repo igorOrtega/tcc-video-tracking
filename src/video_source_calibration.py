@@ -66,13 +66,13 @@ class VideoSourceCalibration:
                 if option == ord('c'):
                     start_calibration = True
                     cv2.putText(frame, "Running, this may take a while ...", (0, 80),
-                            font, font_scale, green, 2, cv2.LINE_AA)
+                                font, font_scale, green, 2, cv2.LINE_AA)
 
-            cv2.putText(frame, "Q - Quit ", (0, 465), font,
+            cv2.putText(frame, "Q - Quit ", (0, 700), font,
                         font_scale, green, 2, cv2.LINE_AA)
 
             cv2.imshow(win_name, frame)
-            
+
             if start_calibration:
                 cv2.waitKey(2000)
                 self.__run(calibration_frames)
@@ -124,6 +124,7 @@ class VideoSourceCalibration:
 
             np.save('{}/cam_mtx.npy'.format(self.__video_source_dir), cam_mtx)
             np.save('{}/dist.npy'.format(self.__video_source_dir), dist)
+
 
 class VideoSourceCalibrationConfig:
 
