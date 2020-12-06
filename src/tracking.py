@@ -40,7 +40,8 @@ class TrackingScheduler:
                 device_number=tracking_config.device_number,
                 device_parameters_dir=tracking_config.device_parameters_dir,
                 show_video=tracking_config.show_video,
-                marker_detection_settings=tracking_config.marker_detection_settings).track)
+                marker_detection_settings=tracking_config.marker_detection_settings,
+                translation_offset=tracking_config.translation_offset).track)
             tracking_process.start()
 
             while True:
@@ -59,12 +60,13 @@ class TrackingScheduler:
 
 
 class Tracking:
-    def __init__(self, queue, device_number, device_parameters_dir, show_video, marker_detection_settings):
+    def __init__(self, queue, device_number, device_parameters_dir, show_video, marker_detection_settings, translation_offset):
         self.__data_queue = queue
         self.__device_number = device_number
         self.__device_parameters_dir = device_parameters_dir
         self.__show_video = show_video
         self.__marker_detection_settings = marker_detection_settings
+        self.__translation_offset = translation_offset
 
     def track(self):
         video_capture = cv2.VideoCapture(
@@ -117,8 +119,15 @@ class Tracking:
                 rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
                     corners, float(self.__marker_detection_settings.marker_length), cam_mtx, dist)
 
-                marker_rvec = rvecs[marker_index]
-                marker_tvec = tvecs[marker_index]
+                marker_position = self.__get_position_matrix(
+                    rvecs[marker_index], tvecs[marker_index])
+
+                marker_position = self.__apply_transformation(
+                    marker_position, self.__translation_offset)
+
+                marker_rvec, marker_tvec = self.__get_rvec_and_tvec(
+                    marker_position)
+
                 aruco.drawAxis(frame, cam_mtx, dist,
                                marker_rvec, marker_tvec, 5)
 
@@ -142,36 +151,18 @@ class Tracking:
                     choosen_marker_id = ids[i][0]
                     choosen_marker_index = i
 
-            if choosen_marker_id == self.__marker_detection_settings.up_marker_id:
-                main_marker_rvec = rvecs[choosen_marker_index]
-                main_marker_tvec = tvecs[choosen_marker_index]
-            else:
-                choosen_marker_rotation_mtx = np.zeros(shape=(3, 3))
-                cv2.Rodrigues(rvecs[choosen_marker_index],
-                              choosen_marker_rotation_mtx)
-                choosen_marker_transformation = np.concatenate(
-                    (choosen_marker_rotation_mtx, np.transpose(tvecs[choosen_marker_index])), axis=1)
-                choosen_marker_transformation = np.concatenate(
-                    (choosen_marker_transformation, np.array([[0, 0, 0, 1]])))
+            choosen_marker_position = self.__get_position_matrix(
+                rvecs[choosen_marker_index], tvecs[choosen_marker_index])
 
-                choosen_marker_transformation = np.dot(
-                    self.__marker_detection_settings.transformations[choosen_marker_id],
-                    np.linalg.inv(choosen_marker_transformation))
+            if choosen_marker_id != self.__marker_detection_settings.up_marker_id:
+                choosen_marker_position = self.__apply_transformation(
+                    choosen_marker_position, self.__marker_detection_settings.transformations[choosen_marker_id])
 
-                choosen_marker_transformation = np.linalg.inv(
-                    choosen_marker_transformation)
+            choosen_marker_position = self.__apply_transformation(
+                choosen_marker_position, self.__translation_offset)
 
-                tvec_t = np.delete(
-                    choosen_marker_transformation[:, 3], (3))
-                main_marker_tvec = tvec_t.T
-
-                choosen_marker_transformation = np.delete(
-                    choosen_marker_transformation, 3, 0)
-                choosen_marker_transformation = np.delete(
-                    choosen_marker_transformation, 3, 1)
-
-                rvec_t, _ = cv2.Rodrigues(choosen_marker_transformation)
-                main_marker_rvec = rvec_t.T
+            main_marker_rvec, main_marker_tvec = self.__get_rvec_and_tvec(
+                choosen_marker_position)
 
             aruco.drawAxis(frame, cam_mtx, dist,
                            main_marker_rvec, main_marker_tvec, 5)
@@ -199,6 +190,33 @@ class Tracking:
             "{}/dist.npy".format(self.__device_parameters_dir))
 
         return cam_mtx, dist
+
+    def __get_position_matrix(self, rvec, tvec):
+        rot_mtx = np.zeros(shape=(3, 3))
+        cv2.Rodrigues(rvec, rot_mtx)
+
+        position = np.concatenate(
+            (rot_mtx, np.transpose(tvec)), axis=1)
+        position = np.concatenate(
+            (position, np.array([[0, 0, 0, 1]])))
+
+        return position
+
+    def __get_rvec_and_tvec(self, position_matrix):
+
+        tvec_t = np.delete(position_matrix[:, 3], (3))
+
+        position_matrix = np.delete(
+            position_matrix, 3, 0)
+        position_matrix = np.delete(
+            position_matrix, 3, 1)
+
+        rvec_t, _ = cv2.Rodrigues(position_matrix)
+
+        return rvec_t.T, tvec_t.T
+
+    def __apply_transformation(self, position_matrix, transformation):
+        return np.linalg.inv(np.dot(transformation, np.linalg.inv(position_matrix)))
 
     def __detection_result(self, rvec, tvec):
         detection_result = {}
@@ -298,13 +316,14 @@ class DataPublishClientUDP:
 class TrackingCofig:
 
     def __init__(self, device_number, device_parameters_dir, show_video,
-                 server_ip, server_port, marker_detection_settings):
+                 server_ip, server_port, marker_detection_settings, translation_offset):
         self.device_number = device_number
         self.device_parameters_dir = device_parameters_dir
         self.show_video = show_video
         self.server_ip = server_ip
         self.server_port = server_port
         self.marker_detection_settings = marker_detection_settings
+        self.translation_offset = translation_offset
 
     @classmethod
     def persisted(cls):
@@ -320,9 +339,10 @@ class TrackingCofig:
                            tracking_config_data['show_video'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'],
-                           tracking_config_data['marker_detection_settings'])
+                           tracking_config_data['marker_detection_settings'],
+                           tracking_config_data['translation_offset'])
         except FileNotFoundError:
-            return cls(0, "", True, "", "", None)
+            return cls(0, "", True, "", "", None, np.zeros(shape=(4, 4)))
 
     def persist(self):
         # Overwrites any existing file.
@@ -333,4 +353,5 @@ class TrackingCofig:
                 'show_video': self.show_video,
                 'server_ip': self.server_ip,
                 'server_port': self.server_port,
-                'marker_detection_settings': self.marker_detection_settings}, output, pickle.HIGHEST_PROTOCOL)
+                'marker_detection_settings': self.marker_detection_settings,
+                'translation_offset': self.translation_offset}, output, pickle.HIGHEST_PROTOCOL)

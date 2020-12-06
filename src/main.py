@@ -1,8 +1,8 @@
 import os
-import glob
 import tkinter as tk
 from tkinter import ttk
 import multiprocessing
+import numpy as np
 from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 from tracking import TrackingScheduler, TrackingCofig
 from marker_detection_settings import CUBE_DETECTION, SINGLE_DETECTION, SingleMarkerDetectionSettings, MarkersCubeDetectionSettings, MarkerCubeMapping
@@ -18,7 +18,7 @@ class App():
         window.title("AR Tracking Interface")
 
         width = 500
-        height = 600
+        height = 700
         pos_x = (window.winfo_screenwidth()/2) - (width/2)
         pos_y = (window.winfo_screenheight()/2) - (height/2)
         window.geometry('%dx%d+%d+%d' % (width, height, pos_x, pos_y))
@@ -269,9 +269,52 @@ class App():
             self.marker_cube_mode.set(True)
             self.marker_cube_settings_selection()
 
+        self.translation_offset_frame = ttk.LabelFrame(
+            self.tracking_config_frame, text="Translation Offset")
+        self.translation_offset_frame.grid(row=2, column=1, pady=5)
+
+        initial_translation_offset_x = self.tracking_config.translation_offset[0][3]
+        if initial_translation_offset_x != 0:
+            initial_translation_offset_x *= -1
+        self.translation_offset_x = tk.DoubleVar()
+        self.translation_offset_x.set(initial_translation_offset_x)
+        self.translation_offset_x_label = ttk.Label(
+            self.translation_offset_frame, text="X")
+        self.translation_offset_x_label.grid(row=1, column=1, pady=5)
+        self.translation_offset_x_entry = ttk.Entry(
+            self.translation_offset_frame, textvariable=self.translation_offset_x, width=5)
+        self.translation_offset_x_entry.grid(
+            row=1, column=2, sticky=tk.W, padx=5)
+
+        initial_translation_offset_y = self.tracking_config.translation_offset[1][3]
+        if initial_translation_offset_y != 0:
+            initial_translation_offset_y *= -1
+        self.translation_offset_y = tk.DoubleVar()
+        self.translation_offset_y.set(initial_translation_offset_y)
+        self.translation_offset_y_label = ttk.Label(
+            self.translation_offset_frame, text="Y")
+        self.translation_offset_y_label.grid(row=1, column=3, pady=5)
+        self.translation_offset_y_entry = ttk.Entry(
+            self.translation_offset_frame, textvariable=self.translation_offset_y, width=5)
+        self.translation_offset_y_entry.grid(
+            row=1, column=4, sticky=tk.W, padx=5)
+
+        initial_translation_offset_z = self.tracking_config.translation_offset[2][3]
+        if initial_translation_offset_z != 0:
+            initial_translation_offset_z *= -1
+        self.translation_offset_z = tk.DoubleVar()
+        self.translation_offset_z.set(initial_translation_offset_z)
+        self.translation_offset_z_label = ttk.Label(
+            self.translation_offset_frame, text="Z")
+        self.translation_offset_z_label.grid(row=1, column=5, pady=5)
+        self.translation_offset_z_entry = ttk.Entry(
+            self.translation_offset_frame, textvariable=self.translation_offset_z, width=5)
+        self.translation_offset_z_entry.grid(
+            row=1, column=6, sticky=tk.W, padx=5)
+
         self.export_coordinates_frame = ttk.LabelFrame(
             self.tracking_config_frame, text="Coordinates Publish Server UDP")
-        self.export_coordinates_frame.grid(row=2, column=1, pady=5)
+        self.export_coordinates_frame.grid(row=3, column=1, pady=5)
 
         self.export_coordinates_input_frame = tk.Frame(
             self.export_coordinates_frame)
@@ -459,6 +502,7 @@ class App():
     def start_tracking(self):
         self.save_tracking_config()
         self.start_tracking_event.set()
+        self.single_marker_save()
 
         if not self.tracking_config.show_video:
             self.tracking_button['text'] = "Stop Tracking"
@@ -523,6 +567,22 @@ class App():
             marker_detection_settings = self.marker_cube_settings
 
         self.tracking_config.marker_detection_settings = marker_detection_settings
+
+        offset_matrix = np.zeros(shape=(4, 4))
+        offset_matrix[0][0] = 1
+        offset_matrix[1][1] = 1
+        offset_matrix[2][2] = 1
+        offset_matrix[0][3] = self.translation_offset_x.get()
+        offset_matrix[1][3] = self.translation_offset_y.get()
+        offset_matrix[2][3] = self.translation_offset_z.get()
+        if offset_matrix[0][3] != 0:
+            offset_matrix[0][3] *= -1
+        if offset_matrix[1][3] != 0:
+            offset_matrix[1][3] *= -1
+        if offset_matrix[2][3] != 0:
+            offset_matrix[2][3] *= -1
+        offset_matrix[3][3] = 1
+        self.tracking_config.translation_offset = offset_matrix
 
         self.tracking_config.persist()
 

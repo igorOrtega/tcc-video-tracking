@@ -93,7 +93,7 @@ class MarkerCubeMapping:
         self.__side_marker_ids = side_marker_ids
         self.__down_marker_id = down_marker_id
 
-        self.__acquire_min_count = 200
+        self.__acquire_min_count = 100
 
     def map(self):
         side_up_transformations = {}
