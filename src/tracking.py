@@ -216,7 +216,7 @@ class Tracking:
         return rvec_t.T, tvec_t.T
 
     def __apply_transformation(self, position_matrix, transformation):
-        return np.linalg.inv(np.dot(transformation, np.linalg.inv(position_matrix)))
+        return np.dot(position_matrix, transformation)
 
     def __detection_result(self, rvec, tvec):
         detection_result = {}

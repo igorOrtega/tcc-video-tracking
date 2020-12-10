@@ -183,7 +183,7 @@ class MarkerCubeMapping:
                             other_marker_transformation = self.__get_transformation_matrix(
                                 rvecs[other_marker_index], tvecs[other_marker_index])
                             transformation_other_to_target = np.dot(np.linalg.inv(
-                                target_marker_transformation), other_marker_transformation)
+                                other_marker_transformation), target_marker_transformation)
 
                             acquire = {}
                             acquire["target"] = target_marker_transformation
@@ -286,8 +286,8 @@ class MarkerCubeMapping:
             local_errors = []
             for transformation in transformations:
                 local_error = 0
-                calculated_result = np.linalg.inv(
-                    np.dot(testing_transformation["other_to_target"], np.linalg.inv(transformation["other"])))
+                calculated_result = np.dot(
+                    transformation["other"], testing_transformation["other_to_target"])
 
                 for row in range(0, rows_count):
                     for col in range(0, cols_count):
