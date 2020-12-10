@@ -273,11 +273,9 @@ class App():
             self.tracking_config_frame, text="Translation Offset")
         self.translation_offset_frame.grid(row=2, column=1, pady=5)
 
-        initial_translation_offset_x = self.tracking_config.translation_offset[0][3]
-        if initial_translation_offset_x != 0:
-            initial_translation_offset_x *= -1
         self.translation_offset_x = tk.DoubleVar()
-        self.translation_offset_x.set(initial_translation_offset_x)
+        self.translation_offset_x.set(
+            self.tracking_config.translation_offset[0][3])
         self.translation_offset_x_label = ttk.Label(
             self.translation_offset_frame, text="X", foreground="red")
         self.translation_offset_x_label.grid(row=1, column=1, pady=5)
@@ -286,11 +284,9 @@ class App():
         self.translation_offset_x_entry.grid(
             row=1, column=2, sticky=tk.W, padx=5)
 
-        initial_translation_offset_y = self.tracking_config.translation_offset[1][3]
-        if initial_translation_offset_y != 0:
-            initial_translation_offset_y *= -1
         self.translation_offset_y = tk.DoubleVar()
-        self.translation_offset_y.set(initial_translation_offset_y)
+        self.translation_offset_y.set(
+            self.tracking_config.translation_offset[1][3])
         self.translation_offset_y_label = ttk.Label(
             self.translation_offset_frame, text="Y", foreground="green")
         self.translation_offset_y_label.grid(row=1, column=3, pady=5)
@@ -299,11 +295,9 @@ class App():
         self.translation_offset_y_entry.grid(
             row=1, column=4, sticky=tk.W, padx=5)
 
-        initial_translation_offset_z = self.tracking_config.translation_offset[2][3]
-        if initial_translation_offset_z != 0:
-            initial_translation_offset_z *= -1
         self.translation_offset_z = tk.DoubleVar()
-        self.translation_offset_z.set(initial_translation_offset_z)
+        self.translation_offset_z.set(
+            self.tracking_config.translation_offset[2][3])
         self.translation_offset_z_label = ttk.Label(
             self.translation_offset_frame, text="Z", foreground="blue")
         self.translation_offset_z_label.grid(row=1, column=5, pady=5)
@@ -575,12 +569,6 @@ class App():
         offset_matrix[0][3] = self.translation_offset_x.get()
         offset_matrix[1][3] = self.translation_offset_y.get()
         offset_matrix[2][3] = self.translation_offset_z.get()
-        if offset_matrix[0][3] != 0:
-            offset_matrix[0][3] *= -1
-        if offset_matrix[1][3] != 0:
-            offset_matrix[1][3] *= -1
-        if offset_matrix[2][3] != 0:
-            offset_matrix[2][3] *= -1
         offset_matrix[3][3] = 1
         self.tracking_config.translation_offset = offset_matrix
 
