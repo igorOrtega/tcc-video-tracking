@@ -270,7 +270,7 @@ class MarkerCubeMapping:
 
             if min_error is None or min_error > side_up_transformation_errors[side_marker_id] + error:
                 best_down_up_transformation = np.dot(
-                    transformations[side_marker_id], best_down_side_transformation)
+                    best_down_side_transformation, transformations[side_marker_id])
                 min_error = side_up_transformation_errors[side_marker_id] + error
 
         transformations[self.__down_marker_id] = best_down_up_transformation
