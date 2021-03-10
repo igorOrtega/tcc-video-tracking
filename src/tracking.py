@@ -69,20 +69,23 @@ class Tracking:
         self.__translation_offset = translation_offset
 
     def track(self):
+        #Descomentar quando nao for utilizar o DroidCam
+        #video_capture = cv2.VideoCapture(
+            #self.__device_number, cv2.CAP_DSHOW)
         video_capture = cv2.VideoCapture(
-            self.__device_number, cv2.CAP_DSHOW)
+            self.__device_number)
 
         video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
+        detection_result = {}
         while True:
             _, frame = video_capture.read()
 
-            detection_result = None
             if self.__marker_detection_settings.identifier == SINGLE_DETECTION:
-                detection_result = self.__single_marker_detection(frame)
+                detection_result = self.__single_marker_detection(frame, detection_result)
             elif self.__marker_detection_settings.identifier == CUBE_DETECTION:
-                detection_result = self.__markers_cube_detection(frame)
+                detection_result = self.__markers_cube_detection(frame, detection_result)
             else:
                 raise Exception("Invalid detection identifier. Received: {}".format(
                     self.__marker_detection_settings.identifier))
@@ -98,7 +101,7 @@ class Tracking:
         video_capture.release()
         cv2.destroyAllWindows()
 
-    def __single_marker_detection(self, frame):
+    def __single_marker_detection(self, frame, last_detection_result):
 
         corners, ids = self.__detect_markers(frame)
 
@@ -131,9 +134,9 @@ class Tracking:
                 aruco.drawAxis(frame, cam_mtx, dist,
                                marker_rvec, marker_tvec, 5)
 
-        return self.__detection_result(marker_rvec, marker_tvec)
+        return self.__detection_result(marker_rvec, marker_tvec, last_detection_result)
 
-    def __markers_cube_detection(self, frame):
+    def __markers_cube_detection(self, frame, last_detection_result):
         corners, ids = self.__detect_markers(frame)
 
         main_marker_rvec = None
@@ -167,7 +170,7 @@ class Tracking:
             aruco.drawAxis(frame, cam_mtx, dist,
                            main_marker_rvec, main_marker_tvec, 5)
 
-        return self.__detection_result(main_marker_rvec, main_marker_tvec)
+        return self.__detection_result(main_marker_rvec, main_marker_tvec, last_detection_result)
 
     def __detect_markers(self, frame):
         parameters = aruco.DetectorParameters_create()
@@ -218,10 +221,11 @@ class Tracking:
     def __apply_transformation(self, position_matrix, transformation):
         return np.dot(position_matrix, transformation)
 
-    def __detection_result(self, rvec, tvec):
+    def __detection_result(self, rvec, tvec, last_detection_result):
         detection_result = {}
 
         detection_result['timestamp'] = time.time()
+        last_detection_result['timestamp'] = detection_result['timestamp']
 
         success = rvec is not None and tvec is not None
         detection_result['success'] = success
@@ -242,6 +246,16 @@ class Tracking:
             detection_result['rotation_forward_x'] = rot_mtx.item(0, 2)
             detection_result['rotation_forward_y'] = rot_mtx.item(1, 2)
             detection_result['rotation_forward_z'] = rot_mtx.item(2, 2)
+
+            if last_detection_result != {} and last_detection_result.get("success"):
+                oscillation = True
+                for value1, value2 in zip(detection_result.values(), last_detection_result.values()):
+                    if abs(value1 - value2) > 0.06:
+                        oscillation = False
+                        break
+                
+                if oscillation:
+                    return last_detection_result
 
         return detection_result
 
