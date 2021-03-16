@@ -8,6 +8,7 @@ import json
 import socket
 from multiprocessing import Process, Queue
 import time
+import math
 import numpy as np
 import cv2
 import cv2.aruco as aruco
@@ -79,13 +80,14 @@ class Tracking:
         video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
         detection_result = {}
+        kalman_filter = create_kalman_filter(18, 6, 0.0334)
         while True:
             _, frame = video_capture.read()
 
             if self.__marker_detection_settings.identifier == SINGLE_DETECTION:
-                detection_result = self.__single_marker_detection(frame, detection_result)
+                detection_result = self.__single_marker_detection(frame, kalman_filter)
             elif self.__marker_detection_settings.identifier == CUBE_DETECTION:
-                detection_result = self.__markers_cube_detection(frame, detection_result)
+                detection_result = self.__markers_cube_detection(frame, kalman_filter)
             else:
                 raise Exception("Invalid detection identifier. Received: {}".format(
                     self.__marker_detection_settings.identifier))
@@ -101,7 +103,7 @@ class Tracking:
         video_capture.release()
         cv2.destroyAllWindows()
 
-    def __single_marker_detection(self, frame, last_detection_result):
+    def __single_marker_detection(self, frame, filter):
 
         corners, ids = self.__detect_markers(frame)
 
@@ -134,9 +136,9 @@ class Tracking:
                 aruco.drawAxis(frame, cam_mtx, dist,
                                marker_rvec, marker_tvec, 5)
 
-        return self.__detection_result(marker_rvec, marker_tvec, last_detection_result)
+        return self.__detection_result(marker_rvec, marker_tvec, filter)
 
-    def __markers_cube_detection(self, frame, last_detection_result):
+    def __markers_cube_detection(self, frame, filter):
         corners, ids = self.__detect_markers(frame)
 
         main_marker_rvec = None
@@ -170,7 +172,7 @@ class Tracking:
             aruco.drawAxis(frame, cam_mtx, dist,
                            main_marker_rvec, main_marker_tvec, 5)
 
-        return self.__detection_result(main_marker_rvec, main_marker_tvec, last_detection_result)
+        return self.__detection_result(main_marker_rvec, main_marker_tvec, filter)
 
     def __detect_markers(self, frame):
         parameters = aruco.DetectorParameters_create()
@@ -221,11 +223,10 @@ class Tracking:
     def __apply_transformation(self, position_matrix, transformation):
         return np.dot(position_matrix, transformation)
 
-    def __detection_result(self, rvec, tvec, last_detection_result):
+    def __detection_result(self, rvec, tvec, filter):
         detection_result = {}
 
         detection_result['timestamp'] = time.time()
-        last_detection_result['timestamp'] = detection_result['timestamp']
 
         success = rvec is not None and tvec is not None
         detection_result['success'] = success
@@ -247,16 +248,9 @@ class Tracking:
             detection_result['rotation_forward_y'] = rot_mtx.item(1, 2)
             detection_result['rotation_forward_z'] = rot_mtx.item(2, 2)
 
-            if last_detection_result != {} and last_detection_result.get("success"):
-                oscillation = True
-                for value1, value2 in zip(detection_result.values(), last_detection_result.values()):
-                    if abs(value1 - value2) > 0.06:
-                        oscillation = False
-                        break
-                
-                if oscillation:
-                    return last_detection_result
-
+            measurements = create_measurement_matrix(detection_result, rot_mtx)
+            update_detection_result(filter, measurements, detection_result)
+        
         return detection_result
 
     def __publish_coordinates(self, data):
@@ -282,7 +276,7 @@ class Tracking:
 
         if detection_result['success'] == 1:
             cv2.putText(frame, 'translation_x: {:.2f}'.format(detection_result['translation_x']), (0, 60),
-                        font, font_scale, font_color, 2, cv2.LINE_AA)
+                        font, font_scale, font_color, 2, cv2.LINE_AA)     
             cv2.putText(frame, 'translation_y: {:.2f}'.format(detection_result['translation_y']), (0, 80),
                         font, font_scale, font_color, 2, cv2.LINE_AA)
             cv2.putText(frame, 'translation_z: {:.2f}'.format(detection_result['translation_z']), (0, 100),
@@ -369,3 +363,110 @@ class TrackingCofig:
                 'server_port': self.server_port,
                 'marker_detection_settings': self.marker_detection_settings,
                 'translation_offset': self.translation_offset}, output, pickle.HIGHEST_PROTOCOL)
+
+def rotation_matrix_to_euler(R):
+    
+    sy = math.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
+    
+    singular = sy < 1e-6
+
+    if  not singular :
+        x = math.atan2(R[2,1] , R[2,2])
+        y = math.atan2(-R[2,0], sy)
+        z = math.atan2(R[1,0], R[0,0])
+    else :
+        x = math.atan2(-R[1,2], R[1,1])
+        y = math.atan2(-R[2,0], sy)
+        z = 0
+
+    return np.array([x, y, z])
+
+def euler_to_rotation_matrix(theta):
+    
+    R_x = np.array([[1,         0,                  0                   ],
+                    [0,         math.cos(theta[0]), -math.sin(theta[0]) ],
+                    [0,         math.sin(theta[0]), math.cos(theta[0])  ]])
+        
+    R_y = np.array([[math.cos(theta[1]),    0,      math.sin(theta[1])  ],
+                    [0,                     1,      0                   ],
+                    [-math.sin(theta[1]),   0,      math.cos(theta[1])  ]])
+                
+    R_z = np.array([[math.cos(theta[2]),    -math.sin(theta[2]),    0],
+                    [math.sin(theta[2]),    math.cos(theta[2]),     0],
+                    [0,                     0,                      1]])
+                    
+    R = np.dot(R_z, np.dot( R_y, R_x ))
+
+    return R
+
+def create_kalman_filter(num_state, num_measurements, dt):
+    kf = cv2.KalmanFilter(num_state, num_measurements, type=cv2.CV_64FC1)
+
+    kf.processNoiseCov = np.eye(18)*1e-5
+    kf.measurementNoiseCov = np.eye(6)*1e-4
+    kf.errorCovPost = np.eye(18)
+
+    kf.transitionMatrix = np.eye(18)
+    kf.transitionMatrix[0, 3] = dt
+    kf.transitionMatrix[1, 4] = dt
+    kf.transitionMatrix[2, 5] = dt
+    kf.transitionMatrix[3, 6] = dt
+    kf.transitionMatrix[4, 7] = dt
+    kf.transitionMatrix[5, 8] = dt
+    kf.transitionMatrix[9, 12] = dt
+    kf.transitionMatrix[10, 13] = dt
+    kf.transitionMatrix[11, 14] = dt
+    kf.transitionMatrix[12, 15] = dt
+    kf.transitionMatrix[13, 16] = dt
+    kf.transitionMatrix[14, 17] = dt
+    kf.transitionMatrix[0, 6] = 0.5 * dt ** 2
+    kf.transitionMatrix[1, 7] = 0.5 * dt ** 2
+    kf.transitionMatrix[2, 8] = 0.5 * dt ** 2
+    kf.transitionMatrix[9, 15] = 0.5 * dt ** 2
+    kf.transitionMatrix[10, 16] = 0.5 * dt ** 2
+    kf.transitionMatrix[11, 17] = 0.5 * dt ** 2
+
+    kf.measurementMatrix = np.zeros((6, 18))
+    kf.measurementMatrix[0, 0] = 1
+    kf.measurementMatrix[1, 1] = 1
+    kf.measurementMatrix[2, 2] = 1
+    kf.measurementMatrix[3, 9] = 1
+    kf.measurementMatrix[4, 10] = 1
+    kf.measurementMatrix[5, 11] = 1
+    return kf
+
+def create_measurement_matrix(measurement, rot_mtx):
+    measurements = None
+    if measurement.get('success'):
+        euler_angles = rotation_matrix_to_euler(rot_mtx)
+        measurements = np.zeros(6)
+        measurements[0] = measurement.get('translation_x')
+        measurements[1] = measurement.get('translation_y')
+        measurements[2] = measurement.get('translation_z')
+        measurements[3] = euler_angles[0]
+        measurements[4] = euler_angles[1]
+        measurements[5] = euler_angles[2]
+        
+    return measurements
+
+def update_detection_result(filter, measurements, detection_result):
+    filter.predict()
+    if measurements is not None:
+        filter.correct(measurements)
+    
+    estimated_position = filter.statePost
+    detection_result['translation_x'] = float(estimated_position[0])
+    detection_result['translation_y'] = float(estimated_position[1])
+    detection_result['translation_z'] = float(estimated_position[2])
+    
+    euler_angles = [estimated_position[9], estimated_position[10], estimated_position[11]]
+    rot_mtx = euler_to_rotation_matrix(euler_angles)
+    detection_result['rotation_right_x'] = rot_mtx.item(0, 0)
+    detection_result['rotation_right_y'] = rot_mtx.item(1, 0)
+    detection_result['rotation_right_z'] = rot_mtx.item(2, 0)
+    detection_result['rotation_up_x'] = rot_mtx.item(0, 1)
+    detection_result['rotation_up_y'] = rot_mtx.item(1, 1)
+    detection_result['rotation_up_z'] = rot_mtx.item(2, 1)
+    detection_result['rotation_forward_x'] = rot_mtx.item(0, 2)
+    detection_result['rotation_forward_y'] = rot_mtx.item(1, 2)
+    detection_result['rotation_forward_z'] = rot_mtx.item(2, 2)
