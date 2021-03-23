@@ -2,6 +2,7 @@ import os
 import tkinter as tk
 from tkinter import ttk
 import multiprocessing
+import time
 import numpy as np
 from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 from tracking import TrackingScheduler, TrackingCofig
@@ -593,4 +594,6 @@ if __name__ == "__main__":
     App(start_tracking_event, stop_tracking_event, tk_root)
     tk_root.mainloop()
 
+    stop_tracking_event.set()
+    time.sleep(1)
     tracking_scheduler_process.terminate()
