@@ -70,7 +70,7 @@ class VideoSourceCalibration:
                     cv2.putText(frame, "Running, this may take a while ...", (0, 80),
                                 font, font_scale, green, 2, cv2.LINE_AA)
 
-            cv2.putText(frame, "Q - Quit ", (0, 700), font,
+            cv2.putText(frame, "Q - Quit ", (0, 105), font,
                         font_scale, green, 2, cv2.LINE_AA)
 
             cv2.imshow(win_name, frame)
