@@ -212,20 +212,20 @@ class App():
         self.cube_side_marker_1_entry = ttk.Entry(
             self.marker_cube_settings_frame, textvariable=self.cube_side_marker_1, width=5)
         self.cube_side_marker_1_entry.grid(row=2, column=2, sticky=tk.W)
-        self.cube_side_marker_2 = tk.IntVar()
+        self.cube_side_marker_2 = tk.StringVar()
         self.cube_side_marker_2_entry = ttk.Entry(
             self.marker_cube_settings_frame, textvariable=self.cube_side_marker_2, width=5)
         self.cube_side_marker_2_entry.grid(row=2, column=3, sticky=tk.W)
-        self.cube_side_marker_3 = tk.IntVar()
+        self.cube_side_marker_3 = tk.StringVar()
         self.cube_side_marker_3_entry = ttk.Entry(
             self.marker_cube_settings_frame, textvariable=self.cube_side_marker_3, width=5)
         self.cube_side_marker_3_entry.grid(row=2, column=4, sticky=tk.W)
-        self.cube_side_marker_4 = tk.IntVar()
+        self.cube_side_marker_4 = tk.StringVar()
         self.cube_side_marker_4_entry = ttk.Entry(
             self.marker_cube_settings_frame, textvariable=self.cube_side_marker_4, width=5)
         self.cube_side_marker_4_entry.grid(row=2, column=5, sticky=tk.W)
 
-        self.cube_down_marker_id = tk.IntVar()
+        self.cube_down_marker_id = tk.StringVar()
         self.cube_down_marker_id_label = ttk.Label(
             self.marker_cube_settings_frame, text="Down Marker ID:")
         self.cube_down_marker_id_label.grid(

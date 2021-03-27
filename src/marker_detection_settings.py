@@ -90,17 +90,29 @@ class MarkerCubeMapping:
         self.__video_source = video_source
         self.__markers_length = markers_length
         self.__up_marker_id = up_marker_id
-        self.__side_marker_ids = side_marker_ids
-        self.__down_marker_id = down_marker_id
+        self.__side_marker_ids = []
+        for side_marker_id in side_marker_ids:
+            if side_marker_id != "":
+                self.__side_marker_ids.append(int(side_marker_id))
+            else:
+                self.__side_marker_ids.append(side_marker_id)
+
+        if down_marker_id != "":
+            self.__down_marker_id = int(down_marker_id)
+        else:
+            self.__down_marker_id = down_marker_id
 
         self.__acquire_min_count = 100
 
     def map(self):
         side_up_transformations = {}
-        down_side_transformations = {}
+        if self.__down_marker_id != "":
+            down_side_transformations = {}
         for side_marker_id in self.__side_marker_ids:
-            side_up_transformations[side_marker_id] = []
-            down_side_transformations[side_marker_id] = []
+            if side_marker_id != "":
+                side_up_transformations[side_marker_id] = []
+                if self.__down_marker_id != "":
+                    down_side_transformations[side_marker_id] = []
 
         cam_mtx = np.load(
             "{}/cam_mtx.npy".format(self.__video_source_dir))
@@ -123,11 +135,13 @@ class MarkerCubeMapping:
 
             done = True
             for side_marker_id in self.__side_marker_ids:
-                done &= len(
-                    side_up_transformations[side_marker_id]) == self.__acquire_min_count
-
-                done &= len(
-                    down_side_transformations[side_marker_id]) == self.__acquire_min_count
+                if side_marker_id != "":
+                    done &= len(
+                        side_up_transformations[side_marker_id]) == self.__acquire_min_count
+                    
+                    if self.__down_marker_id != "":
+                        done &= len(
+                            down_side_transformations[side_marker_id]) == self.__acquire_min_count
 
             if not done:
                 corners, ids = self.__detect_markers(frame)
@@ -210,8 +224,12 @@ class MarkerCubeMapping:
                 cv2.imshow(win_name, frame)
                 cv2.waitKey(1000)
 
-                transformations = self.__compute_transformations(
-                    side_up_transformations, down_side_transformations)
+                if self.__down_marker_id != "":
+                    transformations = self.__compute_transformations(
+                        side_up_transformations, down_side_transformations)
+                else:
+                    transformations = self.__compute_transformations(
+                        side_up_transformations)
 
                 settings = MarkersCubeDetectionSettings(
                     self.__markers_length, self.__up_marker_id, self.__side_marker_ids, self.__down_marker_id, transformations)
@@ -253,29 +271,32 @@ class MarkerCubeMapping:
 
         return transformation
 
-    def __compute_transformations(self, side_up_transformations, down_side_transformations):
+    def __compute_transformations(self, side_up_transformations, down_side_transformations=None):
         transformations = {}
         side_up_transformation_errors = {}
 
         for side_marker_id in self.__side_marker_ids:
-            best_transformation, error = self.__find_best_transformation(
-                side_up_transformations[side_marker_id])
+            if side_marker_id != "":
+                best_transformation, error = self.__find_best_transformation(
+                    side_up_transformations[side_marker_id])
 
-            transformations[side_marker_id] = best_transformation
-            side_up_transformation_errors[side_marker_id] = error
+                transformations[side_marker_id] = best_transformation
+                side_up_transformation_errors[side_marker_id] = error
 
         best_down_up_transformation = np.zeros(shape=(4, 4))
         min_error = None
-        for side_marker_id in self.__side_marker_ids:
-            best_down_side_transformation, error = self.__find_best_transformation(
-                down_side_transformations[side_marker_id])
+        if down_side_transformations is not None:
+            for side_marker_id in self.__side_marker_ids:
+                if side_marker_id != "":
+                    best_down_side_transformation, error = self.__find_best_transformation(
+                        down_side_transformations[side_marker_id])
 
-            if min_error is None or min_error > side_up_transformation_errors[side_marker_id] + error:
-                best_down_up_transformation = np.dot(
-                    best_down_side_transformation, transformations[side_marker_id])
-                min_error = side_up_transformation_errors[side_marker_id] + error
+                    if min_error is None or min_error > side_up_transformation_errors[side_marker_id] + error:
+                        best_down_up_transformation = np.dot(
+                            best_down_side_transformation, transformations[side_marker_id])
+                        min_error = side_up_transformation_errors[side_marker_id] + error
 
-        transformations[self.__down_marker_id] = best_down_up_transformation
+            transformations[self.__down_marker_id] = best_down_up_transformation
 
         return transformations
 
