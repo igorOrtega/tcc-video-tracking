@@ -156,21 +156,22 @@ class Tracking:
                     choosen_marker_id = ids[i][0]
                     choosen_marker_index = i
 
-            choosen_marker_position = self.__get_position_matrix(
-                rvecs[choosen_marker_index], tvecs[choosen_marker_index])
+            if choosen_marker_id == self.__marker_detection_settings.up_marker_id or choosen_marker_id in self.__marker_detection_settings.transformations:
+                choosen_marker_position = self.__get_position_matrix(
+                    rvecs[choosen_marker_index], tvecs[choosen_marker_index])
 
-            if choosen_marker_id != self.__marker_detection_settings.up_marker_id:
+                if choosen_marker_id != self.__marker_detection_settings.up_marker_id:
+                    choosen_marker_position = self.__apply_transformation(
+                        choosen_marker_position, self.__marker_detection_settings.transformations[choosen_marker_id])
+
                 choosen_marker_position = self.__apply_transformation(
-                    choosen_marker_position, self.__marker_detection_settings.transformations[choosen_marker_id])
+                    choosen_marker_position, self.__translation_offset)
 
-            choosen_marker_position = self.__apply_transformation(
-                choosen_marker_position, self.__translation_offset)
+                main_marker_rvec, main_marker_tvec = self.__get_rvec_and_tvec(
+                    choosen_marker_position)
 
-            main_marker_rvec, main_marker_tvec = self.__get_rvec_and_tvec(
-                choosen_marker_position)
-
-            aruco.drawAxis(frame, cam_mtx, dist,
-                           main_marker_rvec, main_marker_tvec, 5)
+                aruco.drawAxis(frame, cam_mtx, dist,
+                            main_marker_rvec, main_marker_tvec, 5)
 
         return self.__detection_result(main_marker_rvec, main_marker_tvec, filter)
 
