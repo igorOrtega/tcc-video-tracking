@@ -6,6 +6,8 @@ except ModuleNotFoundError:
 import os
 import json
 import socket
+import websockets
+import asyncio
 from multiprocessing import Process, Queue
 import time
 import math
@@ -36,8 +38,16 @@ class TrackingScheduler:
             ).listen)
             client_process.start()
 
+            websocket_queue = Queue(1)
+
+            websocket_client_process = Process(target=DataPublishWebsocketClient(
+                queue=websocket_queue
+            ).listen)
+            websocket_client_process.start()
+                
             tracking_process = Process(target=Tracking(
                 queue=queue,
+                websocket_queue=websocket_queue,
                 device_number=tracking_config.device_number,
                 device_parameters_dir=tracking_config.device_parameters_dir,
                 show_video=tracking_config.show_video,
@@ -50,19 +60,21 @@ class TrackingScheduler:
 
                 if not tracking_process.is_alive():
                     client_process.terminate()
+                    websocket_client_process.terminate()
                     self.stop_tracking.clear()
                     break
 
                 if self.stop_tracking.wait(0):
                     tracking_process.terminate()
                     client_process.terminate()
+                    websocket_client_process.terminate()
                     self.stop_tracking.clear()
                     break
 
-
 class Tracking:
-    def __init__(self, queue, device_number, device_parameters_dir, show_video, marker_detection_settings, translation_offset):
+    def __init__(self, queue, websocket_queue, device_number, device_parameters_dir, show_video, marker_detection_settings, translation_offset):
         self.__data_queue = queue
+        self.__data_queue_websocket = websocket_queue
         self.__device_number = device_number
         self.__device_parameters_dir = device_parameters_dir
         self.__show_video = show_video
@@ -173,7 +185,7 @@ class Tracking:
                 aruco.drawAxis(frame, cam_mtx, dist,
                             main_marker_rvec, main_marker_tvec, 5)
 
-        return self.__detection_result(main_marker_rvec, main_marker_tvec, filter)
+        return self.__detection_result(main_marker_rvec, main_marker_tvec, filter, last_detection_result)
 
     def __detect_markers(self, frame):
         parameters = aruco.DetectorParameters_create()
@@ -260,6 +272,11 @@ class Tracking:
 
         self.__data_queue.put(data)
 
+        if self.__data_queue_websocket.full():
+            self.__data_queue_websocket.get()
+
+        self.__data_queue_websocket.put(data)
+
     def __show_video_result(self, frame, detection_result):
         win_name = "Tracking"
         cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
@@ -320,6 +337,24 @@ class DataPublishClientUDP:
         while True:
             data = self.__queue.get()
             sock.sendto(data.encode(), (self.server_ip, self.__server_port))
+
+class DataPublishWebsocketClient:
+
+    def __init__(self, queue):
+        self.__queue = queue
+    
+    def listen(self):
+        start_server = websockets.serve(self.time, '127.0.0.1', 5678, max_queue=1)
+
+        asyncio.get_event_loop().run_until_complete(start_server)
+        asyncio.get_event_loop().run_forever()
+
+    async def time(self, websocket, path):
+
+        while True:
+            data = self.__queue.get()
+            await websocket.send(data)
+            await asyncio.sleep(0.016)
 
 
 class TrackingCofig:
