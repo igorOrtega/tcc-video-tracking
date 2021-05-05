@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk
 import multiprocessing
 import time
+from PIL import ImageTk, Image
+import socket
 import numpy as np
 from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 from tracking import TrackingScheduler, TrackingCofig
@@ -15,6 +17,7 @@ class App():
     def __init__(self, start_tracking, stop_tracking, window):
         self.start_tracking_event = start_tracking
         self.stop_tracking_event = stop_tracking
+        self.saving_error = False
 
         window.title("AR Tracking Interface")
 
@@ -346,12 +349,14 @@ class App():
 
         self.base_video_source_dir = '../assets/camera_calibration_data'
         self.base_cube_dir = '../assets/configs/marker_cubes'
+        self.base_img_dir = '../images'
         self.calibration = None
         self.cube_ids = []
         self.cube_ids_init()
         self.video_source_list = []
         self.refresh_video_sources()
         self.video_source_init()
+        self.icon_img = ImageTk.PhotoImage(Image.open("{}/error_icon.png".format(self.base_img_dir)))
 
     def single_marker_settings_selection(self):
         if self.single_marker_mode.get():
@@ -380,10 +385,35 @@ class App():
         self.single_marker_id.set(self.single_marker_settings.marker_id)
 
     def single_marker_save(self):
-        self.single_marker_settings.marker_length = self.single_marker_length.get()
-        self.single_marker_settings.marker_id = self.single_marker_id.get()
+        try:
+            self.single_marker_settings.marker_length = self.single_marker_length.get()
+            self.single_marker_settings.marker_id = self.single_marker_id.get()
 
-        self.single_marker_settings.persist()
+            self.single_marker_settings.persist()
+            self.saving_error = False
+        except tk.TclError:
+            self.saving_error = True
+            error_window = tk.Toplevel()
+            error_window.title("Saving Error")
+            error_window.grab_set()
+            error_window.resizable(0, 0)
+
+            error_window.columnconfigure([0, 1], minsize=50, weight=1)
+            error_window.rowconfigure([0, 1], minsize=50, weight=1)
+            
+            error_title = tk.Label(master=error_window, text="Insufficient data to save marker ID and length", fg="blue", font=("Arial", 18))
+            error_title.grid(row=0, column=1, sticky="w")
+
+            icon_label = tk.Label(master=error_window, image=self.icon_img, width=80, height=80)
+            icon_label.grid(row=0, column=0)
+
+            self.example_img = ImageTk.PhotoImage(Image.open("{}/saving_marker_example.png".format(self.base_img_dir)))
+            example_label = tk.Label(master=error_window, image=self.example_img, width=170, height=170)
+            example_label.grid(row=2, column=1)
+            
+            error_message = tk.Label(master=error_window, text="To save the marker it is necessary to fill in both Marker ID and Marker length slots. \nIn order to solve this problem, fill in the Marker ID slot with the marker ID and fill in the Marker length slot with the marker side length like in the example bellow.",
+                                    justify="left", font=("Arial", 11),)
+            error_message.grid(row=1, column=1)
 
     def marker_cube_settings_selection(self):
         if self.marker_cube_mode.get():
@@ -449,24 +479,47 @@ class App():
         self.cube_markers_length.set(self.marker_cube_settings.markers_length)
 
     def marker_cube_map(self):
-        detection = MarkerCubeMapping(self.cube_id_selection.get(), self.get_video_source_dir(), self.video_source.current(),
-                                      self.cube_markers_length.get(), self.cube_up_marker_id.get(),
-                                      [self.cube_side_marker_1.get(), self.cube_side_marker_2.get(
-                                      ), self.cube_side_marker_3.get(), self.cube_side_marker_4.get()],
-                                      self.cube_down_marker_id.get())
+        try:
+            detection = MarkerCubeMapping(self.cube_id_selection.get(), self.get_video_source_dir(), self.video_source.current(),
+                                        self.cube_markers_length.get(), self.cube_up_marker_id.get(),
+                                        [self.cube_side_marker_1.get(), self.cube_side_marker_2.get(
+                                        ), self.cube_side_marker_3.get(), self.cube_side_marker_4.get()],
+                                        self.cube_down_marker_id.get())
 
-        detection.map()
-        self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
-            self.cube_id_selection.get())
-        self.cube_id_selection['state'] = 'readonly'
+            detection.map()
+            self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
+                self.cube_id_selection.get())
+            self.cube_id_selection['state'] = 'readonly'
 
-        if not self.cube_ids.__contains__(self.cube_id_selection.get()):
-            self.cube_ids.append(self.cube_id_selection.get())
+            if not self.cube_ids.__contains__(self.cube_id_selection.get()):
+                self.cube_ids.append(self.cube_id_selection.get())
 
-            if self.cube_ids.__contains__(""):
-                self.cube_ids.remove("")
+                if self.cube_ids.__contains__(""):
+                    self.cube_ids.remove("")
 
-            self.cube_id_selection['values'] = self.cube_ids
+                self.cube_id_selection['values'] = self.cube_ids
+        except tk.TclError:
+            error_window = tk.Toplevel()
+            error_window.title("Mapping Error")
+            error_window.grab_set()
+            error_window.resizable(0, 0)
+
+            error_window.columnconfigure([0, 1], minsize=50, weight=1)
+            error_window.rowconfigure([0, 1], minsize=50, weight=1)
+            
+            error_title = tk.Label(master=error_window, text="Insufficient data to start cube mapping", fg="blue", font=("Arial", 18))
+            error_title.grid(row=0, column=1, sticky="w")
+            
+            icon_label = tk.Label(master=error_window, image=self.icon_img, width=80, height=80)
+            icon_label.grid(row=0, column=0)
+            
+            self.example_img = ImageTk.PhotoImage(Image.open("{}/mapping_example.png".format(self.base_img_dir)))
+            example_label = tk.Label(master=error_window, image=self.example_img)
+            example_label.grid(row=2, column=1)
+            
+            error_message = tk.Label(master=error_window, text="This problem occurred because it is necessary to fill in at least the Up Marker ID slot, the first Side Marker ID slot and the Markers length slot. \nTo solve the problem, fill in at least these three slots. The first two with markers IDs and the last one with the markers length like in the example bellow.",
+                                    justify="left", font=("Arial", 11),)
+            error_message.grid(row=1, column=1)
 
     def marker_cube_delete(self):
         filename = '../assets/configs/marker_cubes/{}.pkl'.format(
@@ -495,13 +548,81 @@ class App():
             pass
 
     def start_tracking(self):
-        self.save_tracking_config()
-        self.start_tracking_event.set()
-        self.single_marker_save()
+        try:
+            self.save_tracking_config()
+            self.single_marker_save()
+            if not self.saving_error:
+                self.start_tracking_event.set()
 
-        if not self.tracking_config.show_video:
-            self.tracking_button['text'] = "Stop Tracking"
-            self.tracking_button['command'] = self.stop_tracking
+                if not self.tracking_config.show_video:
+                    self.tracking_button['text'] = "Stop Tracking"
+                    self.tracking_button['command'] = self.stop_tracking
+        except socket.error:
+            error_window = tk.Toplevel()
+            error_window.title("IP Error")
+            error_window.grab_set()
+            error_window.resizable(0, 0)
+
+            error_window.columnconfigure([0, 1], minsize=50, weight=1)
+            error_window.rowconfigure([0, 1], minsize=50, weight=1)
+            
+            error_title = tk.Label(master=error_window, text="IP Address is incorrect", fg="blue", font=("Arial", 18))
+            error_title.grid(row=0, column=1, sticky="w")
+
+            icon_label = tk.Label(master=error_window, image=self.icon_img, width=80, height=80)
+            icon_label.grid(row=0, column=0)
+            
+            self.example_img = ImageTk.PhotoImage(Image.open("{}/IP_address_example.png".format(self.base_img_dir)))
+            example_label = tk.Label(master=error_window, image=self.example_img, width=200, height=70)
+            example_label.grid(row=2, column=1)
+            
+            error_message = tk.Label(master=error_window, text="This problem occurred because the IP Address slot is blank or contains an address that does not exist. \nIf the slot is empty, fill it in with an existing IP address to solve the problem. \nIf the slot is not blank, AR Tracking was not able to connect to the address you filled in because the address is not available. Check for any spelling mistakes. \nAn example of IP address is given below.",
+                                     justify="left", font=("Arial", 11),)
+            error_message.grid(row=1, column=1)
+        except ValueError:
+            error_window = tk.Toplevel()
+            error_window.title("Port Error")
+            error_window.grab_set()
+            error_window.resizable(0, 0)
+
+            error_window.columnconfigure([0, 1], minsize=50, weight=1)
+            error_window.rowconfigure([0, 1], minsize=50, weight=1)
+            
+            error_title = tk.Label(master=error_window, text="Port is incorrect", fg="blue", font=("Arial", 18))
+            error_title.grid(row=0, column=1, sticky="w")
+
+            icon_label = tk.Label(master=error_window, image=self.icon_img, width=80, height=80)
+            icon_label.grid(row=0, column=0)
+            
+            self.example_img = ImageTk.PhotoImage(Image.open("{}/port_example.png".format(self.base_img_dir)))
+            example_label = tk.Label(master=error_window, image=self.example_img, width=270, height=80)
+            example_label.grid(row=2, column=1)
+
+            error_message = tk.Label(master=error_window, text="This problem occurred because the Port slot is blank or contains letters instead of numbers. \nTo solve this problem, fill in the Port slot with a valid port number like in the example below.",
+                                     justify="left", font=("Arial", 11),)
+            error_message.grid(row=1, column=1)
+        except tk.TclError:
+            error_window = tk.Toplevel()
+            error_window.title("Tracking Error")
+            error_window.grab_set()
+            error_window.resizable(0, 0)
+
+            error_window.columnconfigure([0, 1], minsize=50, weight=1)
+            error_window.rowconfigure([0, 1], minsize=50, weight=1)
+
+            error_title = tk.Label(master=error_window, text="Translation Offset slots are blank", fg="blue", font=("Arial", 18))
+            error_title.grid(row=0, column=1, sticky="w")
+
+            icon_label = tk.Label(master=error_window, image=self.icon_img, width=80, height=80)
+            icon_label.grid(row=0, column=0)
+            
+            self.example_img = ImageTk.PhotoImage(Image.open("{}/translation_offset_example.png".format(self.base_img_dir)))
+            example_label = tk.Label(master=error_window, image=self.example_img, width=200, height=70)
+            example_label.grid(row=2, column=1)
+
+            error_message = tk.Label(master=error_window, text="To solve this problem fill in the three slots inside the Translation Offset section with the desired distance offset. \nAn example is given bellow.",
+                                     justify="left", font=("Arial", 11),)
+            error_message.grid(row=1, column=1)
 
     def stop_tracking(self):
         self.stop_tracking_event.set()
@@ -509,9 +630,31 @@ class App():
         self.tracking_button['command'] = self.start_tracking
 
     def calibrate(self):
-        self.save_calibration_config()
-        self.calibration.calibrate()
-        self.update_calibration_status()
+        try:    
+            self.save_calibration_config()
+            self.calibration.calibrate()
+            self.update_calibration_status()
+        except tk.TclError:
+            error_window = tk.Toplevel()
+            error_window.title("Calibration Error")
+            error_window.grab_set()
+            error_window.resizable(0, 0)
+            error_window.columnconfigure([0, 1], minsize=50, weight=1)
+            error_window.rowconfigure([0, 1], minsize=50, weight=1)
+
+            error_title = tk.Label(master=error_window, text="Chessboard square size is incorrect", fg="blue", font=("Arial", 18))
+            error_title.grid(row=0, column=1, sticky="w")
+
+            icon_label = tk.Label(master=error_window, image=self.icon_img, width=80, height=80)
+            icon_label.grid(row=0, column=0)
+            
+            self.example_img = ImageTk.PhotoImage(Image.open("{}/calibration_example.png".format(self.base_img_dir)))
+            example_label = tk.Label(master=error_window, image=self.example_img, width=200, height=130)
+            example_label.grid(row=2, column=1)
+
+            error_message = tk.Label(master=error_window, text="This problem occurred because the Cheesboard Square size slot is blank or contains letters instead of numbers. \nIn order to start the calibration, it is necessary to fill in the Chessboard Square size slot with the chessboard square side length like in the example below.",
+                                     justify="left", font=("Arial", 11))
+            error_message.grid(row=1, column=1)
 
     def reset_calibration(self):
         self.calibration.delete_calibration()
@@ -552,7 +695,10 @@ class App():
         self.tracking_config.device_number = self.video_source.current()
         self.tracking_config.device_parameters_dir = self.get_video_source_dir()
         self.tracking_config.show_video = self.show_video.get()
+        if self.server_ip.get() != "localhost":
+            socket.inet_aton(self.server_ip.get())
         self.tracking_config.server_ip = self.server_ip.get()
+        int(self.server_port.get())
         self.tracking_config.server_port = self.server_port.get()
 
         marker_detection_settings = None
