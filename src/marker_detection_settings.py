@@ -40,7 +40,7 @@ class SingleMarkerDetectionSettings():
                            settings['marker_id'])
 
         except FileNotFoundError:
-            return cls("", "")
+            return cls("13.2", "0")
 
 
 class MarkersCubeDetectionSettings():

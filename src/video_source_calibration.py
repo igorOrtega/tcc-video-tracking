@@ -143,7 +143,7 @@ class VideoSourceCalibrationConfig:
                 calibration_config_data = pickle.load(file)
                 return cls(calibration_config_data['chessboard_square_size'])
         except FileNotFoundError:
-            return cls("")
+            return cls("2.6")
 
     def persist(self):
         # Overwrites any existing file.

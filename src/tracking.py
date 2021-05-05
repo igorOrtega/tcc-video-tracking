@@ -386,7 +386,7 @@ class TrackingCofig:
                            tracking_config_data['marker_detection_settings'],
                            tracking_config_data['translation_offset'])
         except FileNotFoundError:
-            return cls(0, "", True, "", "", None, np.zeros(shape=(4, 4)))
+            return cls(0, "", True, "localhost", "9000", None, np.zeros(shape=(4, 4)))
 
     def persist(self):
         # Overwrites any existing file.
