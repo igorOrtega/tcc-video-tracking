@@ -677,13 +677,20 @@ class App():
             self.calibration_status['foreground'] = "red"
 
     def check_video_source_calibration(self):
-        if not os.path.exists(self.get_video_source_dir()):
+        if os.path.exists(self.get_video_source_dir()):
+            cam_mtx_exists = os.path.isfile(
+                '{}/cam_mtx.npy'.format(self.get_video_source_dir()))
+            dist_exists = os.path.isfile(
+                '{}/dist.npy'.format(self.get_video_source_dir()))
+            if cam_mtx_exists and dist_exists:
+                return True
+        if os.path.exists('../assets/camera_calibration_data/Default_calibration'):
+            cam_mtx_exists = os.path.isfile(
+                '../assets/camera_calibration_data/Default_calibration/cam_mtx.npy')
+            dist_exists = os.path.isfile(
+                '../assets/camera_calibration_data/Default_calibration/dist.npy')
+        else:
             return False
-
-        cam_mtx_exists = os.path.isfile(
-            '{}/cam_mtx.npy'.format(self.get_video_source_dir()))
-        dist_exists = os.path.isfile(
-            '{}/dist.npy'.format(self.get_video_source_dir()))
 
         return cam_mtx_exists & dist_exists
 

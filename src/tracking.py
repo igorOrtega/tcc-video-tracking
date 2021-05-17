@@ -16,18 +16,15 @@ import cv2
 import cv2.aruco as aruco
 from marker_detection_settings import SINGLE_DETECTION, CUBE_DETECTION
 
-
 class TrackingScheduler:
     def __init__(self, start_tracking, stop_tracking):
         self.start_tracking = start_tracking
         self.stop_tracking = stop_tracking
 
     def main(self):
-
         while True:
             self.start_tracking.wait()
             self.start_tracking.clear()
-
             tracking_config = TrackingCofig.persisted()
             queue = Queue(1)
 
@@ -44,7 +41,7 @@ class TrackingScheduler:
                 queue=websocket_queue
             ).listen)
             websocket_client_process.start()
-                
+                    
             tracking_process = Process(target=Tracking(
                 queue=queue,
                 websocket_queue=websocket_queue,
@@ -70,6 +67,7 @@ class TrackingScheduler:
                     websocket_client_process.terminate()
                     self.stop_tracking.clear()
                     break
+
 
 class Tracking:
     def __init__(self, queue, websocket_queue, device_number, device_parameters_dir, show_video, marker_detection_settings, translation_offset):
@@ -202,10 +200,16 @@ class Tracking:
         return corners, ids
 
     def __camera_parameters(self):
-        cam_mtx = np.load(
-            "{}/cam_mtx.npy".format(self.__device_parameters_dir))
-        dist = np.load(
-            "{}/dist.npy".format(self.__device_parameters_dir))
+        if os.path.exists(self.__device_parameters_dir) and os.path.isfile('{}/cam_mtx.npy'.format(self.__device_parameters_dir)) and os.path.isfile('{}/dist.npy'.format(self.__device_parameters_dir)):
+            cam_mtx = np.load(
+                "{}/cam_mtx.npy".format(self.__device_parameters_dir))
+            dist = np.load(
+                "{}/dist.npy".format(self.__device_parameters_dir))
+        else:
+            cam_mtx = np.load(
+                "../assets/camera_calibration_data/Default_calibration/cam_mtx.npy")
+            dist = np.load(
+                "../assets/camera_calibration_data/Default_calibration/dist.npy")
 
         return cam_mtx, dist
 
@@ -489,6 +493,7 @@ def update_detection_result(filter, measurements, detection_result):
     filter.predict()
     if measurements is not None:
         filter.correct(measurements)
+    filter.correct(measurements)
     
     estimated_position = filter.statePost
     detection_result['translation_x'] = float(estimated_position[0])
