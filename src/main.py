@@ -112,7 +112,7 @@ class App():
         self.tracking_config_frame = tk.Frame(
             self.configuration_frame)
         self.tracking_config_frame.grid(
-            row=1, column=1, pady=5, padx=5)
+            row=1, column=1, padx=5)
 
         self.tracking_config_frame.grid_columnconfigure(1, weight=1)
         self.tracking_config_frame.grid_rowconfigure(1, weight=1)
@@ -123,7 +123,7 @@ class App():
 
         self.detection_mode_frame = tk.LabelFrame(
             self.tracking_config_frame, text="Detection Mode")
-        self.detection_mode_frame.grid(row=1, column=1, padx=5, pady=5)
+        self.detection_mode_frame.grid(row=1, column=1, padx=5, pady=2)
 
         self.single_marker_frame = ttk.LabelFrame(
             self.detection_mode_frame, text="Single Marker")
@@ -345,7 +345,14 @@ class App():
 
         self.tracking_button = tk.Button(
             window, text="Start Tracking", command=self.start_tracking)
-        self.tracking_button.grid(row=4, column=1, sticky=tk.S)
+        self.tracking_button.grid(row=3, column=1, sticky=tk.N)
+
+        self.menu_bar = tk.Menu(window)
+        self.menu_help = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_help.add_command(label="About", command=self.create_about_window)
+        self.menu_bar.add_cascade(label="Help", menu=self.menu_help)
+
+        window.config(menu=self.menu_bar)
 
         self.base_video_source_dir = '../assets/camera_calibration_data'
         self.base_cube_dir = '../assets/configs/marker_cubes'
@@ -732,6 +739,15 @@ class App():
         self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
         self.calibration_config.persist()
 
+    def create_about_window(self):
+        about_window = tk.Toplevel()
+        about_window.title("About")
+        about_window.grab_set()
+        about_window.resizable(0, 0)
+        version_label = tk.Label(master=about_window, text='Version: 0.00.0')
+        version_label.grid(sticky='nw')
+        credits_label = tk.Label(master=about_window, text='Credits: Igor Ortega\n              Lucca Catalan de Freitas Reis Viana\n              Vitor Santos', justify='left')
+        credits_label.grid(sticky='nw')
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
