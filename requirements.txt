@@ -14,5 +14,5 @@ pylint==2.5.2
 six==1.14.0
 toml==0.10.0
 typed-ast==1.4.1
-websockets==8.1
+websockets==9.1
 wrapt==1.12.1
