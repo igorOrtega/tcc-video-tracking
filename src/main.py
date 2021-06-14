@@ -678,6 +678,10 @@ class App():
             self.tracking_button['state'] = tk.ACTIVE
             self.calibration_status['text'] = "Calibrated!"
             self.calibration_status['foreground'] = "green"
+        elif(self.check_default_calibration()):
+            self.tracking_button['state'] = tk.ACTIVE
+            self.calibration_status['text'] = "Default Calibration"
+            self.calibration_status['foreground'] = "green"
         else:
             self.tracking_button['state'] = tk.DISABLED
             self.calibration_status['text'] = "Not calibrated!"
@@ -689,8 +693,12 @@ class App():
                 '{}/cam_mtx.npy'.format(self.get_video_source_dir()))
             dist_exists = os.path.isfile(
                 '{}/dist.npy'.format(self.get_video_source_dir()))
-            if cam_mtx_exists and dist_exists:
-                return True
+        else:
+            return False
+
+        return cam_mtx_exists & dist_exists
+    
+    def check_default_calibration(self):
         if os.path.exists('../assets/camera_calibration_data/Default_calibration'):
             cam_mtx_exists = os.path.isfile(
                 '../assets/camera_calibration_data/Default_calibration/cam_mtx.npy')
@@ -699,7 +707,7 @@ class App():
         else:
             return False
 
-        return cam_mtx_exists & dist_exists
+        return cam_mtx_exists & dist_exists 
 
     def get_video_source_dir(self):
         camera_identification = self.video_source.get().replace(" ", "_")

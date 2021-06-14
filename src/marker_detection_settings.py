@@ -113,11 +113,16 @@ class MarkerCubeMapping:
                 side_up_transformations[side_marker_id] = []
                 if self.__down_marker_id != "":
                     down_side_transformations[side_marker_id] = []
-
-        cam_mtx = np.load(
-            "{}/cam_mtx.npy".format(self.__video_source_dir))
-        dist = np.load(
-            "{}/dist.npy".format(self.__video_source_dir))
+        if os.path.exists(self.__video_source_dir) and os.path.isfile("{}/cam_mtx.npy".format(self.__video_source_dir)) and os.path.isfile("{}/dist.npy".format(self.__video_source_dir)):
+            cam_mtx = np.load(
+                "{}/cam_mtx.npy".format(self.__video_source_dir))
+            dist = np.load(
+                "{}/dist.npy".format(self.__video_source_dir))
+        else:
+            cam_mtx = np.load(
+                "../assets/camera_calibration_data/Default_calibration/cam_mtx.npy")
+            dist = np.load(
+                "../assets/camera_calibration_data/Default_calibration/dist.npy")
 
         win_name = "Markers Cube Calibration Image Capture"
         cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
