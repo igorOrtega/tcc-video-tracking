@@ -6,6 +6,7 @@ except ModuleNotFoundError:
 import os
 import json
 import socket
+from numpy.core.fromnumeric import shape
 import websockets
 import asyncio
 from multiprocessing import Process, Queue
@@ -36,7 +37,6 @@ class TrackingScheduler:
             client_process.start()
 
             websocket_queue = Queue(1)
-
             websocket_client_process = Process(target=DataPublishWebsocketClient(
                 queue=websocket_queue
             ).listen)
@@ -78,6 +78,7 @@ class Tracking:
         self.__show_video = show_video
         self.__marker_detection_settings = marker_detection_settings
         self.__translation_offset = translation_offset
+        self.oscillation = False
 
     def track(self):
         #Descomentar quando nao for utilizar o DroidCam
@@ -89,7 +90,7 @@ class Tracking:
         video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-        detection_result = {}
+        detection_result = None
         kalman_filter = create_kalman_filter(18, 6, 0.0334)
         while True:
             _, frame = video_capture.read()
@@ -183,7 +184,7 @@ class Tracking:
                 aruco.drawAxis(frame, cam_mtx, dist,
                             main_marker_rvec, main_marker_tvec, 5)
 
-        return self.__detection_result(main_marker_rvec, main_marker_tvec, filter, last_detection_result)
+        return self.__detection_result(main_marker_rvec, main_marker_tvec, filter)
 
     def __detect_markers(self, frame):
         parameters = aruco.DetectorParameters_create()
@@ -266,7 +267,7 @@ class Tracking:
             detection_result['rotation_forward_z'] = rot_mtx.item(2, 2)
 
             measurements = create_measurement_matrix(detection_result, rot_mtx)
-            update_detection_result(filter, measurements, detection_result)
+            self.oscillation = update_detection_result(filter, measurements, detection_result, self.oscillation)
         
         return detection_result
 
@@ -326,7 +327,6 @@ class Tracking:
                     font_scale, font_color, 2, cv2.LINE_AA)
 
         cv2.imshow(win_name, frame)
-
 
 class DataPublishClientUDP:
 
@@ -430,84 +430,97 @@ def euler_to_rotation_matrix(theta):
     R_y = np.array([[math.cos(theta[1]),    0,      math.sin(theta[1])  ],
                     [0,                     1,      0                   ],
                     [-math.sin(theta[1]),   0,      math.cos(theta[1])  ]])
-                
+                               
     R_z = np.array([[math.cos(theta[2]),    -math.sin(theta[2]),    0],
                     [math.sin(theta[2]),    math.cos(theta[2]),     0],
                     [0,                     0,                      1]])
                     
-    R = np.dot(R_z, np.dot( R_y, R_x ))
+    R = np.dot(R_z, np.dot(R_y, R_x ))
 
     return R
 
-def create_kalman_filter(num_state, num_measurements, dt):
-    kf = cv2.KalmanFilter(num_state, num_measurements, type=cv2.CV_64FC1)
+def create_kalman_filter(num_state, num_measurements, delta_time):
+    kalman_filter = cv2.KalmanFilter(num_state, num_measurements, type=cv2.CV_64FC1)
 
-    kf.processNoiseCov = np.eye(18)*1e-5
-    kf.measurementNoiseCov = np.eye(6)*1e-4
-    kf.errorCovPost = np.eye(18)
+    kalman_filter.processNoiseCov = np.eye(num_state)*1e-5
+    kalman_filter.measurementNoiseCov = np.eye(num_measurements)*1e-4
+    kalman_filter.errorCovPost = np.eye(num_state)
 
-    kf.transitionMatrix = np.eye(18)
-    kf.transitionMatrix[0, 3] = dt
-    kf.transitionMatrix[1, 4] = dt
-    kf.transitionMatrix[2, 5] = dt
-    kf.transitionMatrix[3, 6] = dt
-    kf.transitionMatrix[4, 7] = dt
-    kf.transitionMatrix[5, 8] = dt
-    kf.transitionMatrix[9, 12] = dt
-    kf.transitionMatrix[10, 13] = dt
-    kf.transitionMatrix[11, 14] = dt
-    kf.transitionMatrix[12, 15] = dt
-    kf.transitionMatrix[13, 16] = dt
-    kf.transitionMatrix[14, 17] = dt
-    kf.transitionMatrix[0, 6] = 0.5 * dt ** 2
-    kf.transitionMatrix[1, 7] = 0.5 * dt ** 2
-    kf.transitionMatrix[2, 8] = 0.5 * dt ** 2
-    kf.transitionMatrix[9, 15] = 0.5 * dt ** 2
-    kf.transitionMatrix[10, 16] = 0.5 * dt ** 2
-    kf.transitionMatrix[11, 17] = 0.5 * dt ** 2
+    kalman_filter.transitionMatrix = np.eye(num_state)
+    kalman_filter.transitionMatrix[0, 3] = delta_time
+    kalman_filter.transitionMatrix[1, 4] = delta_time
+    kalman_filter.transitionMatrix[2, 5] = delta_time
+    kalman_filter.transitionMatrix[3, 6] = delta_time
+    kalman_filter.transitionMatrix[4, 7] = delta_time
+    kalman_filter.transitionMatrix[5, 8] = delta_time
+    kalman_filter.transitionMatrix[9, 12] = delta_time
+    kalman_filter.transitionMatrix[10, 13] = delta_time
+    kalman_filter.transitionMatrix[11, 14] = delta_time
+    kalman_filter.transitionMatrix[12, 15] = delta_time
+    kalman_filter.transitionMatrix[13, 16] = delta_time
+    kalman_filter.transitionMatrix[14, 17] = delta_time
+    kalman_filter.transitionMatrix[0, 6] = 0.5 * delta_time ** 2
+    kalman_filter.transitionMatrix[1, 7] = 0.5 * delta_time ** 2
+    kalman_filter.transitionMatrix[2, 8] = 0.5 * delta_time ** 2
+    kalman_filter.transitionMatrix[9, 15] = 0.5 * delta_time ** 2
+    kalman_filter.transitionMatrix[10, 16] = 0.5 * delta_time ** 2
+    kalman_filter.transitionMatrix[11, 17] = 0.5 * delta_time ** 2
 
-    kf.measurementMatrix = np.zeros((6, 18))
-    kf.measurementMatrix[0, 0] = 1
-    kf.measurementMatrix[1, 1] = 1
-    kf.measurementMatrix[2, 2] = 1
-    kf.measurementMatrix[3, 9] = 1
-    kf.measurementMatrix[4, 10] = 1
-    kf.measurementMatrix[5, 11] = 1
-    return kf
+
+    kalman_filter.measurementMatrix = np.zeros((num_measurements, num_state))
+    kalman_filter.measurementMatrix[0, 0] = 1
+    kalman_filter.measurementMatrix[1, 1] = 1
+    kalman_filter.measurementMatrix[2, 2] = 1
+    kalman_filter.measurementMatrix[3, 9] = 1
+    kalman_filter.measurementMatrix[4, 10] = 1
+    kalman_filter.measurementMatrix[5, 11] = 1
+    return kalman_filter
 
 def create_measurement_matrix(measurement, rot_mtx):
-    measurements = None
-    if measurement.get('success'):
-        euler_angles = rotation_matrix_to_euler(rot_mtx)
-        measurements = np.zeros(6)
-        measurements[0] = measurement.get('translation_x')
-        measurements[1] = measurement.get('translation_y')
-        measurements[2] = measurement.get('translation_z')
-        measurements[3] = euler_angles[0]
-        measurements[4] = euler_angles[1]
-        measurements[5] = euler_angles[2]
+    euler_angles = rotation_matrix_to_euler(rot_mtx)
+    measurements = np.zeros(6)
+    measurements[0] = measurement.get('translation_x')
+    measurements[1] = measurement.get('translation_y')
+    measurements[2] = measurement.get('translation_z')
+    measurements[3] = euler_angles[0]
+    measurements[4] = euler_angles[1]
+    measurements[5] = euler_angles[2]
         
     return measurements
 
-def update_detection_result(filter, measurements, detection_result):
+def update_detection_result(filter, measurements, detection_result, oscillation):
     filter.predict()
-    if measurements is not None:
-        filter.correct(measurements)
     filter.correct(measurements)
     
     estimated_position = filter.statePost
     detection_result['translation_x'] = float(estimated_position[0])
     detection_result['translation_y'] = float(estimated_position[1])
     detection_result['translation_z'] = float(estimated_position[2])
-    
-    euler_angles = [estimated_position[9], estimated_position[10], estimated_position[11]]
-    rot_mtx = euler_to_rotation_matrix(euler_angles)
-    detection_result['rotation_right_x'] = rot_mtx.item(0, 0)
-    detection_result['rotation_right_y'] = rot_mtx.item(1, 0)
-    detection_result['rotation_right_z'] = rot_mtx.item(2, 0)
-    detection_result['rotation_up_x'] = rot_mtx.item(0, 1)
-    detection_result['rotation_up_y'] = rot_mtx.item(1, 1)
-    detection_result['rotation_up_z'] = rot_mtx.item(2, 1)
-    detection_result['rotation_forward_x'] = rot_mtx.item(0, 2)
-    detection_result['rotation_forward_y'] = rot_mtx.item(1, 2)
-    detection_result['rotation_forward_z'] = rot_mtx.item(2, 2)
+
+    filtered_euler_angle = np.array([estimated_position[9], estimated_position[10], estimated_position[11]])
+
+    rot_mtx = np.array([[detection_result.get('rotation_right_x'), detection_result.get('rotation_up_x'), detection_result.get('rotation_forward_x')],
+                         [detection_result.get('rotation_right_y'), detection_result.get('rotation_up_y'), detection_result.get('rotation_forward_y')],
+                         [detection_result.get('rotation_right_z'), detection_result.get('rotation_up_z'), detection_result.get('rotation_forward_z')]])
+    euler_angle = rotation_matrix_to_euler(rot_mtx)
+    for i in range(0, 3):
+        if abs(euler_angle[i] - filtered_euler_angle[i]) > 1.0:
+            oscillation = True
+            break
+        elif oscillation:
+            if abs(euler_angle[i] - filtered_euler_angle[i]) > 0.05:
+                break
+        if i == 2:
+            oscillation = False
+    if not oscillation:
+        filtered_rot_mtx = euler_to_rotation_matrix(filtered_euler_angle)
+        detection_result['rotation_right_x'] = filtered_rot_mtx.item(0, 0)
+        detection_result['rotation_right_y'] = filtered_rot_mtx.item(1, 0)
+        detection_result['rotation_right_z'] = filtered_rot_mtx.item(2, 0)
+        detection_result['rotation_up_x'] = filtered_rot_mtx.item(0, 1)
+        detection_result['rotation_up_y'] = filtered_rot_mtx.item(1, 1)
+        detection_result['rotation_up_z'] = filtered_rot_mtx.item(2, 1)
+        detection_result['rotation_forward_x'] = filtered_rot_mtx.item(0, 2)
+        detection_result['rotation_forward_y'] = filtered_rot_mtx.item(1, 2)
+        detection_result['rotation_forward_z'] = filtered_rot_mtx.item(2, 2)
+    return oscillation
