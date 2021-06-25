@@ -92,6 +92,11 @@ class Tracking:
 
         detection_result = None
         kalman_filter = create_kalman_filter(18, 6, 0.0334)
+        #kalman_filter = create_kalman_filter(9, 3, 0.0334)
+        testx = False
+        testz = False
+        test_filteredx = False
+        test_filteredz = False
         while True:
             _, frame = video_capture.read()
 
@@ -108,8 +113,49 @@ class Tracking:
             if self.__show_video:
                 self.__show_video_result(frame, detection_result)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            pressed_key = cv2.waitKey(1) & 0xFF
+            if pressed_key == ord('q'):
                 break
+            elif pressed_key == ord('x'):
+                testx = True
+                test_start = time.time()
+            elif pressed_key == ord('z'):
+                testz = True
+                test_start = time.time()
+            elif pressed_key == ord('c'):
+                test_filteredx = True
+                test_start = time.time()
+            elif pressed_key == ord('v'):
+                test_filteredz = True
+                test_start = time.time()
+
+            if testx:
+                if time.time() - test_start < 5:
+                    print(str(detection_result.get("translation_x")).replace('.', ','))      
+                else:
+                    print("----------------")
+                    testx = False
+
+            if testz:
+                if time.time() - test_start < 5:
+                    print(str(detection_result.get("translation_z")).replace('.', ','))  
+                else:
+                    print("----------------")
+                    testz = False
+            
+            if test_filteredx:
+                if time.time() - test_start < 5:
+                    print(str(detection_result.get("filtered_translation_x")).replace('.', ','))  
+                else:
+                    print("----------------")
+                    test_filteredx = False
+
+            if test_filteredz:
+                if time.time() - test_start < 5:
+                    print(str(detection_result.get("filtered_translation_z")).replace('.', ','))  
+                else:
+                    print("----------------")
+                    test_filteredz = False
 
         video_capture.release()
         cv2.destroyAllWindows()
@@ -254,8 +300,10 @@ class Tracking:
             cv2.Rodrigues(rvec, rot_mtx)
 
             detection_result['translation_x'] = tvec.item(0)
+            detection_result['filtered_translation_x'] = tvec.item(0)
             detection_result['translation_y'] = tvec.item(1)
             detection_result['translation_z'] = tvec.item(2)
+            detection_result['filtered_translation_z'] = tvec.item(2)
             detection_result['rotation_right_x'] = rot_mtx.item(0, 0)
             detection_result['rotation_right_y'] = rot_mtx.item(1, 0)
             detection_result['rotation_right_z'] = rot_mtx.item(2, 0)
@@ -479,6 +527,7 @@ def create_kalman_filter(num_state, num_measurements, delta_time):
 def create_measurement_matrix(measurement, rot_mtx):
     euler_angles = rotation_matrix_to_euler(rot_mtx)
     measurements = np.zeros(6)
+    #measurements = np.zeros(3)
     measurements[0] = measurement.get('translation_x')
     measurements[1] = measurement.get('translation_y')
     measurements[2] = measurement.get('translation_z')
@@ -493,9 +542,9 @@ def update_detection_result(filter, measurements, detection_result, oscillation)
     filter.correct(measurements)
     
     estimated_position = filter.statePost
-    detection_result['translation_x'] = float(estimated_position[0])
+    detection_result['filtered_translation_x'] = float(estimated_position[0])
     detection_result['translation_y'] = float(estimated_position[1])
-    detection_result['translation_z'] = float(estimated_position[2])
+    detection_result['filtered_translation_z'] = float(estimated_position[2])
 
     filtered_euler_angle = np.array([estimated_position[9], estimated_position[10], estimated_position[11]])
 
