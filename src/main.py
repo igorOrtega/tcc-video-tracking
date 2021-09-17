@@ -22,7 +22,7 @@ class App():
         window.title("AR Tracking Interface")
 
         width = 500
-        height = 700
+        height = 360
         pos_x = (window.winfo_screenwidth()/2) - (width/2)
         pos_y = (window.winfo_screenheight()/2) - (height/2)
         window.geometry('%dx%d+%d+%d' % (width, height, pos_x, pos_y))
@@ -38,9 +38,19 @@ class App():
         window.grid_rowconfigure(4, weight=1)
         window.grid_columnconfigure(1, weight=1)
 
+        tabControl = ttk.Notebook(window)
+        tab1 = ttk.Frame(tabControl)
+        tab2 = ttk.Frame(tabControl)
+        tab3 = ttk.Frame(tabControl)
+
+        tabControl.add(tab1, text="Camera")
+        tabControl.add(tab2, text="Tracking Configuration")
+        tabControl.add(tab3, text="Tracking")
+        tabControl.pack(fill="both")
+
         self.video_source_frame = ttk.LabelFrame(
-            window, text="Video Source")
-        self.video_source_frame.grid(row=1, column=1, pady=5, padx=5)
+            tab1, text="Video Source")
+        self.video_source_frame.place(relx=0.5, rely=0.5, anchor='center')
         self.video_source_frame.grid_columnconfigure(1, weight=1)
 
         self.refresh_video_sources_button = tk.Button(
@@ -102,9 +112,8 @@ class App():
             self.calibration_buttons_frame, text="Reset", command=self.reset_calibration)
         self.calibrate_button.grid(row=1, column=2, padx=5)
 
-        self.configuration_frame = tk.Frame(window)
-        self.configuration_frame.grid(
-            row=2, column=1)
+        self.configuration_frame = tk.Frame(tab2)
+        self.configuration_frame.pack()
 
         self.configuration_frame.grid_columnconfigure(1, weight=1)
         self.configuration_frame.grid_columnconfigure(2, weight=1)
@@ -310,9 +319,12 @@ class App():
         self.translation_offset_z_entry.grid(
             row=1, column=6, sticky=tk.W, padx=5)
 
+        self.publishing_config_frame = tk.Frame(tab3)
+        self.publishing_config_frame.place(relx=0.5, rely=0.5, anchor='center')
+
         self.export_coordinates_frame = ttk.LabelFrame(
-            self.tracking_config_frame, text="Coordinates Publish Server UDP")
-        self.export_coordinates_frame.grid(row=3, column=1, pady=5)
+            self.publishing_config_frame, text="Coordinates Publish Server UDP")
+        self.export_coordinates_frame.grid(row=0, column=1, pady=5)
 
         self.export_coordinates_input_frame = tk.Frame(
             self.export_coordinates_frame)
@@ -337,15 +349,96 @@ class App():
             self.export_coordinates_input_frame, textvariable=self.server_port, width=7)
         self.server_port_entry.grid(row=1, column=4)
 
+        self.export_video_frame = ttk.LabelFrame(
+            self.publishing_config_frame, text="Video Publish Server UDP")
+        self.export_video_frame.grid(row=1, column=1, pady=5)
+
+        self.export_video_input_frame = tk.Frame(
+            self.export_video_frame)
+        self.export_video_input_frame.grid(
+            row=1, column=1, padx=5, pady=5)
+
+        self.video_server_ip = tk.StringVar()
+        self.video_server_ip.set(self.tracking_config.video_server_ip)
+        self.video_server_ip_label = ttk.Label(
+            self.export_video_input_frame, text="IP Address:")
+        self.video_server_ip_label.grid(row=1, column=1)
+        self.video_server_ip_entry = ttk.Entry(
+            self.export_video_input_frame, textvariable=self.video_server_ip, width=15)
+        self.video_server_ip_entry.grid(row=1, column=2)
+
+        self.video_server_port = tk.StringVar()
+        self.video_server_port.set(self.tracking_config.video_server_port)
+        self.video_server_port_label = ttk.Label(
+            self.export_video_input_frame, text="Port:")
+        self.video_server_port_label.grid(row=1, column=3)
+        self.video_server_port_entry = ttk.Entry(
+            self.export_video_input_frame, textvariable=self.video_server_port, width=7)
+        self.video_server_port_entry.grid(row=1, column=4)
+
+        self.export_coordinates_websocket_frame = ttk.LabelFrame(
+            self.publishing_config_frame, text="Coordinates Publish Server Web")
+        self.export_coordinates_websocket_frame.grid(row=2, column=1, pady=5)
+
+        self.export_coordinates_input_websocket_frame = tk.Frame(
+            self.export_coordinates_websocket_frame)
+        self.export_coordinates_input_websocket_frame.grid(
+            row=1, column=1, padx=5, pady=5)
+
+        self.websocket_server_ip = tk.StringVar()
+        self.websocket_server_ip.set(self.tracking_config.websocket_server_ip)
+        self.websocket_server_ip_label = ttk.Label(
+            self.export_coordinates_input_websocket_frame, text="IP Address:")
+        self.websocket_server_ip_label.grid(row=1, column=1)
+        self.websocket_server_ip_entry = ttk.Entry(
+            self.export_coordinates_input_websocket_frame, textvariable=self.websocket_server_ip, width=15)
+        self.websocket_server_ip_entry.grid(row=1, column=2)
+
+        self.websocket_server_port = tk.StringVar()
+        self.websocket_server_port.set(self.tracking_config.websocket_server_port)
+        self.websocket_server_port_label = ttk.Label(
+            self.export_coordinates_input_websocket_frame, text="Port:")
+        self.websocket_server_port_label.grid(row=1, column=3)
+        self.websocket_server_port_entry = ttk.Entry(
+            self.export_coordinates_input_websocket_frame, textvariable=self.websocket_server_port, width=7)
+        self.websocket_server_port_entry.grid(row=1, column=4)
+
+        self.export_video_websocket_frame = ttk.LabelFrame(
+            self.publishing_config_frame, text="Video Publish Server Web")
+        self.export_video_websocket_frame.grid(row=3, column=1, pady=5)
+
+        self.export_video_input_websocket_frame = tk.Frame(
+            self.export_video_websocket_frame)
+        self.export_video_input_websocket_frame.grid(
+            row=1, column=1, padx=5, pady=5)
+
+        self.websocket_video_server_ip = tk.StringVar()
+        self.websocket_video_server_ip.set(self.tracking_config.websocket_video_server_ip)
+        self.websocket_video_server_ip_label = ttk.Label(
+            self.export_video_input_websocket_frame, text="IP Address:")
+        self.websocket_video_server_ip_label.grid(row=1, column=1)
+        self.websocket_video_server_ip_entry = ttk.Entry(
+            self.export_video_input_websocket_frame, textvariable=self.websocket_video_server_ip, width=15)
+        self.websocket_video_server_ip_entry.grid(row=1, column=2)
+
+        self.websocket_video_server_port = tk.StringVar()
+        self.websocket_video_server_port.set(self.tracking_config.websocket_video_server_port)
+        self.websocket_video_server_port_label = ttk.Label(
+            self.export_video_input_websocket_frame, text="Port:")
+        self.websocket_video_server_port_label.grid(row=1, column=3)
+        self.websocket_video_server_port_entry = ttk.Entry(
+            self.export_video_input_websocket_frame, textvariable=self.websocket_video_server_port, width=7)
+        self.websocket_video_server_port_entry.grid(row=1, column=4)
+
         self.show_video = tk.BooleanVar()
         self.show_video.set(self.tracking_config.show_video)
         self.show_video_checkbox = tk.Checkbutton(
-            self.tracking_config_frame, text="Show video", variable=self.show_video)
+            self.publishing_config_frame, text="Show video", variable=self.show_video)
         self.show_video_checkbox.grid(row=4, column=1, pady=5)
 
         self.tracking_button = tk.Button(
-            window, text="Start Tracking", command=self.start_tracking)
-        self.tracking_button.grid(row=3, column=1, sticky=tk.N)
+            self.publishing_config_frame, text="Start Tracking", command=self.start_tracking)
+        self.tracking_button.grid(row=5, column=1, sticky=tk.N)
 
         self.menu_bar = tk.Menu(window)
         self.menu_help = tk.Menu(self.menu_bar, tearoff=0)
@@ -722,6 +815,21 @@ class App():
         self.tracking_config.server_ip = self.server_ip.get()
         int(self.server_port.get())
         self.tracking_config.server_port = self.server_port.get()
+        if self.video_server_ip.get() != "localhost":
+            socket.inet_aton(self.video_server_ip.get())
+        self.tracking_config.video_server_ip = self.video_server_ip.get()
+        int(self.video_server_port.get())
+        self.tracking_config.video_server_port = self.video_server_port.get()
+        if self.websocket_server_ip.get() != "localhost":
+            socket.inet_aton(self.websocket_server_ip.get())
+        self.tracking_config.websocket_server_ip = self.websocket_server_ip.get()
+        int(self.websocket_server_port.get())
+        self.tracking_config.websocket_server_port = self.websocket_server_port.get()
+        if self.websocket_video_server_ip.get() != "localhost":
+            socket.inet_aton(self.websocket_video_server_ip.get())
+        self.tracking_config.websocket_video_server_ip = self.websocket_video_server_ip.get()
+        int(self.websocket_video_server_port.get())
+        self.tracking_config.websocket_video_server_port = self.websocket_video_server_port.get()
 
         marker_detection_settings = None
         if self.single_marker_mode.get():
