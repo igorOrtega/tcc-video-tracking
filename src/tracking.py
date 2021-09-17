@@ -6,7 +6,6 @@ except ModuleNotFoundError:
 import os
 import json
 import socket
-from numpy.core.fromnumeric import shape
 import websockets
 import asyncio
 from multiprocessing import Process, Queue
@@ -35,16 +34,36 @@ class TrackingScheduler:
                 queue=queue
             ).listen)
             client_process.start()
+            
+            frame_queue = Queue(1)
+            image_client_process = Process(target=ImagePublishClientUDP(
+                server_ip=tracking_config.video_server_ip,
+                server_port=int(tracking_config.video_server_port),
+                queue=frame_queue
+            ).listen)
+            image_client_process.start()
 
             websocket_queue = Queue(1)
             websocket_client_process = Process(target=DataPublishWebsocketClient(
+                server_ip=tracking_config.websocket_server_ip,
+                server_port=tracking_config.websocket_server_port,
                 queue=websocket_queue
             ).listen)
             websocket_client_process.start()
-                    
+            
+            websocket_frame_queue = Queue(1)
+            websocket_image_client_process = Process(target=ImagePublishWebsocketClient(
+                server_ip=tracking_config.websocket_video_server_ip,
+                server_port=tracking_config.websocket_video_server_port,
+                queue=websocket_frame_queue
+            ).listen)
+            websocket_image_client_process.start()
+
             tracking_process = Process(target=Tracking(
                 queue=queue,
                 websocket_queue=websocket_queue,
+                frame_queue=frame_queue,
+                websocket_frame_queue=websocket_frame_queue,
                 device_number=tracking_config.device_number,
                 device_parameters_dir=tracking_config.device_parameters_dir,
                 show_video=tracking_config.show_video,
@@ -58,6 +77,8 @@ class TrackingScheduler:
                 if not tracking_process.is_alive():
                     client_process.terminate()
                     websocket_client_process.terminate()
+                    image_client_process.terminate()
+                    websocket_image_client_process.terminate()
                     self.stop_tracking.clear()
                     break
 
@@ -65,14 +86,18 @@ class TrackingScheduler:
                     tracking_process.terminate()
                     client_process.terminate()
                     websocket_client_process.terminate()
+                    image_client_process.terminate()
+                    websocket_image_client_process.terminate()
                     self.stop_tracking.clear()
                     break
 
 
 class Tracking:
-    def __init__(self, queue, websocket_queue, device_number, device_parameters_dir, show_video, marker_detection_settings, translation_offset):
+    def __init__(self, queue, websocket_queue, frame_queue, websocket_frame_queue, device_number, device_parameters_dir, show_video, marker_detection_settings, translation_offset):
         self.__data_queue = queue
         self.__data_queue_websocket = websocket_queue
+        self.__frame_queue = frame_queue
+        self.__frame_queue_websocket = websocket_frame_queue
         self.__device_number = device_number
         self.__device_parameters_dir = device_parameters_dir
         self.__show_video = show_video
@@ -90,7 +115,7 @@ class Tracking:
         video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-        detection_result = None
+        detection_result = {}
         kalman_filter = create_kalman_filter(18, 6, 0.0334)
         while True:
             _, frame = video_capture.read()
@@ -103,7 +128,7 @@ class Tracking:
                 raise Exception("Invalid detection identifier. Received: {}".format(
                     self.__marker_detection_settings.identifier))
 
-            self.__publish_coordinates(json.dumps(detection_result))
+            self.__publish_video_and_coordinates(json.dumps(detection_result), frame)
 
             if self.__show_video:
                 self.__show_video_result(frame, detection_result)
@@ -113,6 +138,8 @@ class Tracking:
 
         video_capture.release()
         cv2.destroyAllWindows()
+        if self.__frame_queue_websocket.full():
+            self.__frame_queue_websocket.get()
 
     def __single_marker_detection(self, frame, filter):
 
@@ -271,7 +298,7 @@ class Tracking:
         
         return detection_result
 
-    def __publish_coordinates(self, data):
+    def __publish_video_and_coordinates(self, data, frame):
         if self.__data_queue.full():
             self.__data_queue.get()
 
@@ -281,6 +308,16 @@ class Tracking:
             self.__data_queue_websocket.get()
 
         self.__data_queue_websocket.put(data)
+
+        if self.__frame_queue.full():
+            self.__frame_queue.get()
+
+        self.__frame_queue.put(frame)
+
+        if self.__frame_queue_websocket.full():
+            self.__frame_queue_websocket.get()
+
+        self.__frame_queue_websocket.put(frame)
 
     def __show_video_result(self, frame, detection_result):
         win_name = "Tracking"
@@ -331,7 +368,7 @@ class Tracking:
 class DataPublishClientUDP:
 
     def __init__(self, server_ip, server_port, queue):
-        self.server_ip = server_ip
+        self.__server_ip = server_ip
         self.__server_port = server_port
         self.__queue = queue
 
@@ -340,15 +377,36 @@ class DataPublishClientUDP:
 
         while True:
             data = self.__queue.get()
-            sock.sendto(data.encode(), (self.server_ip, self.__server_port))
+            sock.sendto(data.encode(), (self.__server_ip, self.__server_port))
 
-class DataPublishWebsocketClient:
+class ImagePublishClientUDP:
 
-    def __init__(self, queue):
+    def __init__(self, server_ip, server_port, queue):
+        self.__server_ip = server_ip
+        self.__server_port = server_port
         self.__queue = queue
     
     def listen(self):
-        start_server = websockets.serve(self.time, '127.0.0.1', 5678, max_queue=1)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+
+        while True:
+            frame = self.__queue.get()
+            _, frame = cv2.imencode(".jpg", frame, encode_param)
+            frame = pickle.dumps(frame, 0)
+            sock.sendto(frame, (self.__server_ip, self.__server_port))
+
+
+class DataPublishWebsocketClient:
+
+    def __init__(self, server_ip, server_port, queue):
+        self.__queue = queue
+        self.__server_ip = server_ip
+        self.__server_port = server_port
+
+    
+    def listen(self):
+        start_server = websockets.serve(self.time, self.__server_ip, self.__server_port, max_queue=1)
 
         asyncio.get_event_loop().run_until_complete(start_server)
         asyncio.get_event_loop().run_forever()
@@ -360,16 +418,47 @@ class DataPublishWebsocketClient:
             await websocket.send(data)
             await asyncio.sleep(0.016)
 
+class ImagePublishWebsocketClient:
+
+    def __init__(self, server_ip, server_port, queue):
+        self.__queue = queue
+        self.__server_ip = server_ip
+        self.__server_port = server_port
+    
+    def listen(self):
+        start_server = websockets.serve(self.time, self.__server_ip, self.__server_port, max_queue=1)
+
+        asyncio.get_event_loop().run_until_complete(start_server)
+        asyncio.get_event_loop().run_forever()
+
+    async def time(self, websocket, path):
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+
+        while True:
+            frame = self.__queue.get()
+            _, frame = cv2.imencode(".jpg", frame, encode_param)
+            frame = pickle.dumps(frame, 0)
+            await websocket.send(frame)
+            await asyncio.sleep(0.016)
+
+
 
 class TrackingCofig:
 
     def __init__(self, device_number, device_parameters_dir, show_video,
-                 server_ip, server_port, marker_detection_settings, translation_offset):
+                 server_ip, server_port, video_server_ip, video_server_port,
+                 websocket_server_ip, websocket_server_port, websocket_video_server_ip, websocket_video_server_port, marker_detection_settings, translation_offset):
         self.device_number = device_number
         self.device_parameters_dir = device_parameters_dir
         self.show_video = show_video
         self.server_ip = server_ip
         self.server_port = server_port
+        self.video_server_ip = video_server_ip
+        self.video_server_port = video_server_port
+        self.websocket_server_ip = websocket_server_ip
+        self.websocket_server_port = websocket_server_port
+        self.websocket_video_server_ip = websocket_video_server_ip
+        self.websocket_video_server_port = websocket_video_server_port
         self.marker_detection_settings = marker_detection_settings
         self.translation_offset = translation_offset
 
@@ -387,10 +476,16 @@ class TrackingCofig:
                            tracking_config_data['show_video'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'],
+                           tracking_config_data['video_server_ip'],
+                           tracking_config_data['video_server_port'],
+                           tracking_config_data['websocket_server_ip'],
+                           tracking_config_data['websocket_server_port'],
+                           tracking_config_data['websocket_video_server_ip'],
+                           tracking_config_data['websocket_video_server_port'],
                            tracking_config_data['marker_detection_settings'],
                            tracking_config_data['translation_offset'])
         except FileNotFoundError:
-            return cls(0, "", True, "localhost", "9000", None, np.zeros(shape=(4, 4)))
+            return cls(0, "", True, "localhost", "9000", "localhost", "9000", "localhost", "9000", "localhost", "9000", None, np.zeros(shape=(4, 4)))
 
     def persist(self):
         # Overwrites any existing file.
@@ -401,6 +496,12 @@ class TrackingCofig:
                 'show_video': self.show_video,
                 'server_ip': self.server_ip,
                 'server_port': self.server_port,
+                'video_server_ip': self.video_server_ip,
+                'video_server_port': self.video_server_port,
+                'websocket_server_ip': self.websocket_server_ip,
+                'websocket_server_port': self.websocket_server_port,
+                'websocket_video_server_ip': self.websocket_video_server_ip,
+                'websocket_video_server_port': self.websocket_video_server_port,
                 'marker_detection_settings': self.marker_detection_settings,
                 'translation_offset': self.translation_offset}, output, pickle.HIGHEST_PROTOCOL)
 
