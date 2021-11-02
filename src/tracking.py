@@ -65,7 +65,7 @@ class TrackingScheduler:
                 frame_queue=frame_queue,
                 websocket_frame_queue=websocket_frame_queue,
                 device_number=tracking_config.device_number,
-                device_parameters_dir=tracking_config.device_parameters_dir,
+                device_calibration_dir=tracking_config.device_calibration_dir,
                 show_video=tracking_config.show_video,
                 marker_detection_settings=tracking_config.marker_detection_settings,
                 translation_offset=tracking_config.translation_offset).track)
@@ -93,13 +93,13 @@ class TrackingScheduler:
 
 
 class Tracking:
-    def __init__(self, queue, websocket_queue, frame_queue, websocket_frame_queue, device_number, device_parameters_dir, show_video, marker_detection_settings, translation_offset):
+    def __init__(self, queue, websocket_queue, frame_queue, websocket_frame_queue, device_number, device_calibration_dir, show_video, flip_video, marker_detection_settings, translation_offset):
         self.__data_queue = queue
         self.__data_queue_websocket = websocket_queue
         self.__frame_queue = frame_queue
         self.__frame_queue_websocket = websocket_frame_queue
         self.__device_number = device_number
-        self.__device_parameters_dir = device_parameters_dir
+        self.__device_calibration_dir = device_calibration_dir
         self.__show_video = show_video
         self.__marker_detection_settings = marker_detection_settings
         self.__translation_offset = translation_offset
@@ -228,11 +228,11 @@ class Tracking:
         return corners, ids
 
     def __camera_parameters(self):
-        if os.path.exists(self.__device_parameters_dir) and os.path.isfile('{}/cam_mtx.npy'.format(self.__device_parameters_dir)) and os.path.isfile('{}/dist.npy'.format(self.__device_parameters_dir)):
+        if os.path.exists(self.__device_calibration_dir) and os.path.isfile('{}/cam_mtx.npy'.format(self.__device_calibration_dir)) and os.path.isfile('{}/dist.npy'.format(self.__device_calibration_dir)):
             cam_mtx = np.load(
-                "{}/cam_mtx.npy".format(self.__device_parameters_dir))
+                "{}/cam_mtx.npy".format(self.__device_calibration_dir))
             dist = np.load(
-                "{}/dist.npy".format(self.__device_parameters_dir))
+                "{}/dist.npy".format(self.__device_calibration_dir))
         else:
             cam_mtx = np.load(
                 "../assets/camera_calibration_data/Default_calibration/cam_mtx.npy")
@@ -445,11 +445,13 @@ class ImagePublishWebsocketClient:
 
 class TrackingCofig:
 
-    def __init__(self, device_number, device_parameters_dir, show_video,
+    def __init__(self, device_number, device_calibration_dir, calibration_number, cube_number, show_video, flip_video,
                  server_ip, server_port, video_server_ip, video_server_port,
                  websocket_server_ip, websocket_server_port, websocket_video_server_ip, websocket_video_server_port, marker_detection_settings, translation_offset):
         self.device_number = device_number
-        self.device_parameters_dir = device_parameters_dir
+        self.device_calibration_dir = device_calibration_dir
+        self.calibration_number = calibration_number
+        self.cube_number = cube_number
         self.show_video = show_video
         self.server_ip = server_ip
         self.server_port = server_port
@@ -472,7 +474,9 @@ class TrackingCofig:
                 tracking_config_data = pickle.load(file)
 
                 return cls(tracking_config_data['device_number'],
-                           tracking_config_data['device_parameters_dir'],
+                           tracking_config_data['device_calibration_dir'],
+                           tracking_config_data['calibration_number'],
+                           tracking_config_data['cube_number'],
                            tracking_config_data['show_video'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'],
@@ -485,14 +489,16 @@ class TrackingCofig:
                            tracking_config_data['marker_detection_settings'],
                            tracking_config_data['translation_offset'])
         except FileNotFoundError:
-            return cls(0, "", True, "localhost", "9000", "localhost", "9000", "localhost", "5678", "localhost", "9000", None, np.zeros(shape=(4, 4)))
+            return cls(0, "", 0, 0, True, False, "localhost", "9000", "localhost", "9000", "localhost", "5678", "localhost", "9000", None, np.zeros(shape=(4, 4)))
 
     def persist(self):
         # Overwrites any existing file.
         with open('../assets/configs/tracking_config_data.pkl', 'wb+') as output:
             pickle.dump({
                 'device_number': self.device_number,
-                'device_parameters_dir': self.device_parameters_dir,
+                'device_calibration_dir': self.device_calibration_dir,
+                'calibration_number': self.calibration_number,
+                'cube_number': self.cube_number,
                 'show_video': self.show_video,
                 'server_ip': self.server_ip,
                 'server_port': self.server_port,

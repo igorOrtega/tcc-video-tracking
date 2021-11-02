@@ -1,8 +1,10 @@
 import os
 import tkinter as tk
+from tkinter import messagebox
 from tkinter import ttk
 import multiprocessing
 import time
+from tkinter.constants import ACTIVE, DISABLED
 from PIL import ImageTk, Image
 import socket
 import numpy as np
@@ -18,6 +20,9 @@ class App():
         self.start_tracking_event = start_tracking
         self.stop_tracking_event = stop_tracking
         self.saving_error = False
+        self.base_video_source_dir = '../assets/camera_calibration_data'
+        self.base_cube_dir = '../assets/configs/marker_cubes'
+        self.base_img_dir = '../images'
 
         window.title("AR Tracking Interface")
 
@@ -60,8 +65,7 @@ class App():
 
         self.video_source = ttk.Combobox(
             self.video_source_frame, state="readonly", height=4, width=25)
-        self.video_source.bind('<<ComboboxSelected>>',
-                               self.video_source_init)
+        self.video_source.bind('<<ComboboxSelected>>')
         self.video_source.grid(row=2, column=1, padx=5, pady=5)
 
         self.video_source_calibration_frame = ttk.LabelFrame(
@@ -69,24 +73,27 @@ class App():
         self.video_source_calibration_frame.grid(
             row=3, column=1, padx=5, pady=5)
 
-        self.video_source_calibration_status_frame = tk.Frame(
+        self.calibration_selection_frame = tk.Frame(
             self.video_source_calibration_frame)
-        self.video_source_calibration_status_frame.grid(
+        self.calibration_selection_frame.grid(
             row=1, column=1, padx=5, pady=5)
+        
+        self.calibration_selection = ttk.Combobox(
+            self.calibration_selection_frame, state="readonly", height=4, width=25)
+        self.calibration_selection.bind('<<ComboboxSelected>>',
+                               self.calibration_selected)
+        self.calibration_selection.grid(row=1, column=1)
 
-        self.calibration_status_label = ttk.Label(
-            self.video_source_calibration_status_frame, text="Status:")
-        self.calibration_status_label.grid(row=1, column=1)
-        self.calibration_status = ttk.Label(
-            self.video_source_calibration_status_frame)
-        self.calibration_status.grid(row=1, column=2)
+        self.new_calibration_button = tk.Button(
+            self.calibration_selection_frame, text="New", command=self.add_calibration)
+        self.new_calibration_button.grid(row=1, column=2, padx=5)
 
         self.calibration_chessboard_parameters_frame = tk.Frame(
             self.video_source_calibration_frame)
         self.calibration_chessboard_parameters_frame.grid(
             row=2, column=1, padx=5)
 
-        self.calibration_config = VideoSourceCalibrationConfig.persisted()
+        self.calibration_config = VideoSourceCalibrationConfig.persisted(self.get_calibration_dir())
 
         self.chessboard_square_size = tk.DoubleVar()
         self.chessboard_square_size.set(
@@ -97,7 +104,7 @@ class App():
             row=1, column=1)
         self.chessboard_square_size_entry = ttk.Entry(
             self.calibration_chessboard_parameters_frame, width=5,
-            textvariable=self.chessboard_square_size)
+            textvariable=self.chessboard_square_size, state=DISABLED)
         self.chessboard_square_size_entry.grid(row=1, column=2)
 
         self.calibration_buttons_frame = tk.Frame(
@@ -105,12 +112,12 @@ class App():
         self.calibration_buttons_frame.grid(row=3, column=1, pady=5)
 
         self.calibrate_button = tk.Button(
-            self.calibration_buttons_frame, text="Calibrate", command=self.calibrate)
+            self.calibration_buttons_frame, text="Calibrate", command=self.calibrate, state=DISABLED)
         self.calibrate_button.grid(row=1, column=1, padx=5)
 
-        self.calibrate_button = tk.Button(
-            self.calibration_buttons_frame, text="Reset", command=self.reset_calibration)
-        self.calibrate_button.grid(row=1, column=2, padx=5)
+        self.delete_button = tk.Button(
+            self.calibration_buttons_frame, text="Delete", command=self.delete_calibration)
+        self.delete_button.grid(row=1, column=2, padx=5)
 
         self.configuration_frame = tk.Frame(tab2)
         self.configuration_frame.pack()
@@ -212,7 +219,7 @@ class App():
         self.cube_up_marker_id_label.grid(
             row=1, column=1, sticky=tk.W + tk.N)
         self.cube_up_marker_id_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_up_marker_id, width=5)
+            self.marker_cube_settings_frame, textvariable=self.cube_up_marker_id, width=5, state=DISABLED)
         self.cube_up_marker_id_entry.grid(row=1, column=2, sticky=tk.W)
 
         self.cube_side_marker_ids_label = ttk.Label(
@@ -222,19 +229,19 @@ class App():
 
         self.cube_side_marker_1 = tk.IntVar()
         self.cube_side_marker_1_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_1, width=5)
+            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_1, width=5, state=DISABLED)
         self.cube_side_marker_1_entry.grid(row=2, column=2, sticky=tk.W)
         self.cube_side_marker_2 = tk.StringVar()
         self.cube_side_marker_2_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_2, width=5)
+            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_2, width=5, state=DISABLED)
         self.cube_side_marker_2_entry.grid(row=2, column=3, sticky=tk.W)
         self.cube_side_marker_3 = tk.StringVar()
         self.cube_side_marker_3_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_3, width=5)
+            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_3, width=5, state=DISABLED)
         self.cube_side_marker_3_entry.grid(row=2, column=4, sticky=tk.W)
         self.cube_side_marker_4 = tk.StringVar()
         self.cube_side_marker_4_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_4, width=5)
+            self.marker_cube_settings_frame, textvariable=self.cube_side_marker_4, width=5, state=DISABLED)
         self.cube_side_marker_4_entry.grid(row=2, column=5, sticky=tk.W)
 
         self.cube_down_marker_id = tk.StringVar()
@@ -243,7 +250,7 @@ class App():
         self.cube_down_marker_id_label.grid(
             row=3, column=1, sticky=tk.W + tk.N)
         self.cube_down_marker_id_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_down_marker_id, width=5)
+            self.marker_cube_settings_frame, textvariable=self.cube_down_marker_id, width=5, state=DISABLED)
         self.cube_down_marker_id_entry.grid(row=3, column=2, sticky=tk.W)
 
         self.cube_markers_length = tk.DoubleVar()
@@ -252,7 +259,7 @@ class App():
         self.cube_markers_length_label.grid(
             row=4, column=1, pady=5)
         self.cube_markers_length_entry = ttk.Entry(
-            self.marker_cube_settings_frame, textvariable=self.cube_markers_length, width=5)
+            self.marker_cube_settings_frame, textvariable=self.cube_markers_length, width=5, state=DISABLED)
         self.cube_markers_length_entry.grid(row=4, column=2, sticky=tk.W)
 
         self.marker_cube_buttons_frame = tk.Frame(
@@ -261,7 +268,7 @@ class App():
             row=4, column=1, padx=5, pady=5)
 
         self.marker_cube_id_map_button = tk.Button(
-            self.marker_cube_buttons_frame, text="Map and Save", command=self.marker_cube_map)
+            self.marker_cube_buttons_frame, text="Map and Save", command=self.marker_cube_map, state=DISABLED)
         self.marker_cube_id_map_button.grid(row=1, column=1, padx=5)
 
         self.marker_cube_id_delete_button = tk.Button(
@@ -447,15 +454,14 @@ class App():
 
         window.config(menu=self.menu_bar)
 
-        self.base_video_source_dir = '../assets/camera_calibration_data'
-        self.base_cube_dir = '../assets/configs/marker_cubes'
-        self.base_img_dir = '../images'
         self.calibration = None
+        self.calibrations_list = []
+        self.calibration_selection_init()
         self.cube_ids = []
         self.cube_ids_init()
         self.video_source_list = []
         self.refresh_video_sources()
-        self.video_source_init()
+        self.video_source.current(self.tracking_config.device_number) #selects the last camera used by the AR Tracking
         self.icon_img = ImageTk.PhotoImage(Image.open("{}/error_icon.png".format(self.base_img_dir)))
 
     def single_marker_settings_selection(self):
@@ -518,14 +524,11 @@ class App():
     def marker_cube_settings_selection(self):
         if self.marker_cube_mode.get():
             self.single_marker_mode.set(False)
-            for child in self.marker_cube_settings_frame.winfo_children():
-                child.configure(state=tk.ACTIVE)
 
             for child in self.cube_id_frame.winfo_children():
                 child.configure(state=tk.ACTIVE)
 
-            for child in self.marker_cube_buttons_frame.winfo_children():
-                child.configure(state=tk.ACTIVE)
+            self.marker_cube_id_delete_button['state'] = ACTIVE
 
             for child in self.single_marker_settings_frame.winfo_children():
                 child.configure(state=tk.DISABLED)
@@ -542,7 +545,7 @@ class App():
         self.cube_id_selection['values'] = self.cube_ids
 
         if len(self.cube_ids) > 0:
-            self.cube_id_selection.current(0)
+            self.cube_id_selection.current(self.tracking_config.cube_number) # selects the last marker cube used by the AR Tracking
             self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
                 self.cube_id_selection.get())
             self.marker_cube_settings_set()
@@ -564,6 +567,9 @@ class App():
         self.cube_id_selection.current(len(self.cube_ids) - 1)
         self.cube_id_selected()
         self.cube_id_selection['state'] = 'normal'
+        self.marker_cube_id_map_button['state'] = ACTIVE
+        for child in self.marker_cube_settings_frame.winfo_children():
+                child.configure(state=tk.ACTIVE)
 
     def marker_cube_settings_set(self):
         self.cube_up_marker_id.set(self.marker_cube_settings.up_marker_id)
@@ -590,14 +596,17 @@ class App():
             self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
                 self.cube_id_selection.get())
             self.cube_id_selection['state'] = 'readonly'
+            self.marker_cube_id_map_button['state'] = DISABLED
+            for child in self.marker_cube_settings_frame.winfo_children():
+                child.configure(state=tk.DISABLED)
 
             if not self.cube_ids.__contains__(self.cube_id_selection.get()):
                 self.cube_ids.append(self.cube_id_selection.get())
 
-                if self.cube_ids.__contains__(""):
-                    self.cube_ids.remove("")
+            if self.cube_ids.__contains__(""):
+                self.cube_ids.remove("")
 
-                self.cube_id_selection['values'] = self.cube_ids
+            self.cube_id_selection['values'] = sorted(self.cube_ids, key=str.lower)
         except tk.TclError:
             error_window = tk.Toplevel()
             error_window.title("Mapping Error")
@@ -622,22 +631,28 @@ class App():
             error_message.grid(row=1, column=1)
 
     def marker_cube_delete(self):
-        filename = '../assets/configs/marker_cubes/{}.pkl'.format(
-            self.cube_id_selection.get())
-        if os.path.isfile(filename):
-            os.remove(filename)
+        msg_box = tk.messagebox.askquestion('Delete confirmation', 'Are you sure you want to delete ' + self.cube_id_selection.get() + '?')
+        if msg_box == 'yes':   
+            filename = '../assets/configs/marker_cubes/{}.pkl'.format(
+                self.cube_id_selection.get())
+            if os.path.isfile(filename):
+                os.remove(filename)
 
-        if self.cube_ids.__contains__(self.cube_id_selection.get()):
-            self.cube_ids.remove(self.cube_id_selection.get())
-            self.cube_id_selection['values'] = self.cube_ids
+            if self.cube_ids.__contains__(self.cube_id_selection.get()):
+                self.cube_ids.remove(self.cube_id_selection.get())
+                self.cube_id_selection['values'] = self.cube_ids
 
-        if len(self.cube_ids) > 0:
-            self.cube_id_selection.current(0)
-            self.marker_cube_settings_set()
-        else:
-            self.cube_id_selection.set("")
+            if len(self.cube_ids) > 0:
+                self.cube_id_selection.current(0)
+                self.tracking_config.cube_number = 0
+                self.tracking_config.persist()
+                self.marker_cube_settings_set()
+            else:
+                self.cube_id_selection.set("")
 
-        self.cube_id_selected()
+            self.cube_id_selected()
+        for child in self.marker_cube_settings_frame.winfo_children():
+            child.configure(state=tk.DISABLED)
 
     def refresh_video_sources(self):
         try:
@@ -729,11 +744,55 @@ class App():
         self.tracking_button['text'] = "Start Tracking"
         self.tracking_button['command'] = self.start_tracking
 
+    def calibration_selection_init(self):
+        for calibration_select in os.listdir(self.base_video_source_dir):
+            self.calibrations_list.append(calibration_select)
+
+        self.calibration_selection['values'] = self.calibrations_list
+
+        if len(self.calibrations_list) > 0:
+            self.calibration_selection.current(self.tracking_config.calibration_number) #selects the last calibration used by the AR Tracking
+            self.calibration_config = VideoSourceCalibrationConfig.persisted(
+                self.get_calibration_dir())
+            self.chessboard_square_size.set(self.calibration_config.chessboard_square_size)
+        else:
+            self.calibration_selection.set("") 
+
+    def calibration_selected(self, _=None):
+        self.calibration_config = VideoSourceCalibrationConfig.persisted(
+            self.get_calibration_dir())
+        self.chessboard_square_size.set(self.calibration_config.chessboard_square_size)
+
+    def add_calibration(self):
+        if self.calibrations_list.__contains__(""):
+            self.calibrations_list.remove("")
+
+        self.calibrations_list.append("")
+        self.calibration_selection['values'] = self.calibrations_list
+        self.calibration_selection.current(len(self.calibrations_list) - 1)
+        self.calibration_selected()
+        self.calibration_selection['state'] = 'normal'
+        self.chessboard_square_size_entry['state'] = ACTIVE
+        self.calibrate_button['state'] = ACTIVE
+    
     def calibrate(self):
         try:    
-            self.save_calibration_config()
+            self.calibration = VideoSourceCalibration(
+                self.get_calibration_dir(), self.video_source.current(), self.chessboard_square_size.get())
+
             self.calibration.calibrate()
-            self.update_calibration_status()
+            self.save_calibration_config()
+            self.calibration_selection['state'] = 'readonly'
+            self.chessboard_square_size_entry['state'] = DISABLED
+            self.calibrate_button['state'] = DISABLED
+
+            if not self.calibrations_list.__contains__(self.calibration_selection.get()):
+                self.calibrations_list.append(self.calibration_selection.get())
+
+            if self.calibrations_list.__contains__(""):
+                    self.calibrations_list.remove("")
+            
+            self.calibration_selection['values'] = sorted(self.calibrations_list, key=str.lower)
         except tk.TclError:
             error_window = tk.Toplevel()
             error_window.title("Calibration Error")
@@ -752,33 +811,40 @@ class App():
             example_label = tk.Label(master=error_window, image=self.example_img, width=200, height=130)
             example_label.grid(row=2, column=1)
 
-            error_message = tk.Label(master=error_window, text="This problem occurred because the Cheesboard Square size slot is blank or contains letters instead of numbers. \nIn order to start the calibration, it is necessary to fill in the Chessboard Square size slot with the chessboard square side length like in the example below.",
+            error_message = tk.Label(master=error_window, text="This problem occurred because the Chessboard Square size slot is blank or contains letters instead of numbers. \nIn order to start the calibration, it is necessary to fill in the Chessboard Square size slot with the chessboard square side length like in the example below.",
                                      justify="left", font=("Arial", 11))
             error_message.grid(row=1, column=1)
 
-    def reset_calibration(self):
-        self.calibration.delete_calibration()
-        self.update_calibration_status()
+    def delete_calibration(self):
+        msg_box = tk.messagebox.askquestion('Delete confirmation', 'Are you sure you want to delete ' + self.calibration_selection.get() + '?')
+        if msg_box == 'yes':
+            if self.calibration_selection.get() != "":
+                folder_name = '../assets/camera_calibration_data/{}'.format(self.calibration_selection.get())
+                if os.path.exists(folder_name):
+                    if os.path.isfile('{}/cam_mtx.npy'.format(folder_name)):
+                        os.remove('{}/cam_mtx.npy'.format(folder_name))
 
-    def video_source_init(self, _=None):
-        self.update_calibration_status()
+                    if os.path.isfile('{}/dist.npy'.format(folder_name)):
+                        os.remove('{}/dist.npy'.format(folder_name))
 
-        self.calibration = VideoSourceCalibration(
-            self.get_video_source_dir(), self.video_source.current(), self.calibration_config)
+                    if os.path.isfile('{}/calibration_config_data.pkl'.format(folder_name)):
+                        os.remove('{}/calibration_config_data.pkl'.format(folder_name))
 
-    def update_calibration_status(self):
-        if(self.check_video_source_calibration()):
-            self.tracking_button['state'] = tk.ACTIVE
-            self.calibration_status['text'] = "Calibrated!"
-            self.calibration_status['foreground'] = "green"
-        elif(self.check_default_calibration()):
-            self.tracking_button['state'] = tk.ACTIVE
-            self.calibration_status['text'] = "Default Calibration"
-            self.calibration_status['foreground'] = "green"
-        else:
-            self.tracking_button['state'] = tk.DISABLED
-            self.calibration_status['text'] = "Not calibrated!"
-            self.calibration_status['foreground'] = "red"
+                    os.rmdir(folder_name)
+
+            if self.calibrations_list.__contains__(self.calibration_selection.get()):
+                self.calibrations_list.remove(self.calibration_selection.get())
+                self.calibration_selection['values'] = self.calibrations_list
+
+            if len(self.calibrations_list) > 0:
+                self.calibration_selection.current(0)
+                self.tracking_config.calibration_number = 0
+                self.tracking_config.persist()
+            else:
+                self.calibration_selection.set("")
+
+            self.calibration_selected()
+        self.chessboard_square_size_entry['state'] = DISABLED
 
     def check_video_source_calibration(self):
         if os.path.exists(self.get_video_source_dir()):
@@ -806,10 +872,17 @@ class App():
         camera_identification = self.video_source.get().replace(" ", "_")
         return '{}/{}'.format(self.base_video_source_dir, camera_identification)
 
+    def get_calibration_dir(self):
+        calibration_identification = self.calibration_selection.get()
+        return '{}/{}'.format(self.base_video_source_dir, calibration_identification)
+
     def save_tracking_config(self):
         self.tracking_config.device_number = self.video_source.current()
-        self.tracking_config.device_parameters_dir = self.get_video_source_dir()
+        self.tracking_config.device_calibration_dir = self.get_calibration_dir()
+        self.tracking_config.calibration_number = self.calibration_selection.current()
+        self.tracking_config.cube_number = self.cube_id_selection.current()
         self.tracking_config.show_video = self.show_video.get()
+        self.tracking_config.flip_video = self.flip_video.get()
         if self.server_ip.get() != "localhost":
             socket.inet_aton(self.server_ip.get())
         self.tracking_config.server_ip = self.server_ip.get()
@@ -853,7 +926,7 @@ class App():
 
     def save_calibration_config(self):
         self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
-        self.calibration_config.persist()
+        self.calibration_config.persist(self.get_calibration_dir())
 
     def create_about_window(self):
         about_window = tk.Toplevel()

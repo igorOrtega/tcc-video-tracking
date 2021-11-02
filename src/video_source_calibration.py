@@ -12,13 +12,13 @@ import cv2.aruco as aruco
 
 class VideoSourceCalibration:
 
-    def __init__(self, video_source_dir, video_source, calibration_config):
+    def __init__(self, calibration_dir, video_source, chessboard_square_size):
         self.__criteria = (cv2.TERM_CRITERIA_EPS +
                            cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-        self.__video_source_dir = video_source_dir
+        self.__calibration_dir = calibration_dir
         self.__video_source = video_source
-        self.__calibration_config = calibration_config
+        self.__chessboard_square_size = chessboard_square_size
 
     def calibrate(self):
         win_name = "Video Source Calibration Image Capture"
@@ -93,17 +93,10 @@ class VideoSourceCalibration:
                 ready_to_calibrate = True
                 status_color = green
 
-    def delete_calibration(self):
-        if os.path.isfile('{}/cam_mtx.npy'.format(self.__video_source_dir)):
-            os.remove('{}/cam_mtx.npy'.format(self.__video_source_dir))
-
-        if os.path.isfile('{}/dist.npy'.format(self.__video_source_dir)):
-            os.remove('{}/dist.npy'.format(self.__video_source_dir))
-
     def __run(self, calibration_frames):
         objp = np.zeros((9*6, 3), np.float32)
         objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)*float(
-            self.__calibration_config.chessboard_square_size)
+            self.__chessboard_square_size)
 
         objpoints = []
         imgpoints = []
@@ -121,11 +114,11 @@ class VideoSourceCalibration:
             objpoints, imgpoints, img_size, None, None)
 
         if ret_val:
-            if not os.path.exists(self.__video_source_dir):
-                os.makedirs(self.__video_source_dir)
+            if not os.path.exists(self.__calibration_dir):
+                os.makedirs(self.__calibration_dir)
 
-            np.save('{}/cam_mtx.npy'.format(self.__video_source_dir), cam_mtx)
-            np.save('{}/dist.npy'.format(self.__video_source_dir), dist)
+            np.save('{}/cam_mtx.npy'.format(self.__calibration_dir), cam_mtx)
+            np.save('{}/dist.npy'.format(self.__calibration_dir), dist)
 
 
 class VideoSourceCalibrationConfig:
@@ -134,19 +127,19 @@ class VideoSourceCalibrationConfig:
         self.chessboard_square_size = chessboard_square_size
 
     @classmethod
-    def persisted(cls):
+    def persisted(cls, calibration_dir):
         if not os.path.exists('../assets/configs/'):
             os.makedirs('../assets/configs/')
 
         try:
-            with open('../assets/configs/calibration_config_data.pkl', 'rb') as file:
+            with open('{}/calibration_config_data.pkl'.format(calibration_dir), 'rb') as file:
                 calibration_config_data = pickle.load(file)
                 return cls(calibration_config_data['chessboard_square_size'])
         except FileNotFoundError:
-            return cls("2.6")
+            return cls("")
 
-    def persist(self):
+    def persist(self, calibration_dir):
         # Overwrites any existing file.
-        with open('../assets/configs/calibration_config_data.pkl', 'wb+') as output:
+        with open('{}/calibration_config_data.pkl'.format(calibration_dir), 'wb+') as output:
             pickle.dump({
                 'chessboard_square_size': self.chessboard_square_size}, output, pickle.HIGHEST_PROTOCOL)

@@ -84,9 +84,9 @@ class MarkersCubeDetectionSettings():
 
 class MarkerCubeMapping:
 
-    def __init__(self, cube_id, video_source_dir, video_source, markers_length, up_marker_id, side_marker_ids, down_marker_id):
+    def __init__(self, cube_id, calibration_dir, video_source, markers_length, up_marker_id, side_marker_ids, down_marker_id):
         self.__cube_id = cube_id
-        self.__video_source_dir = video_source_dir
+        self.__calibration_dir = calibration_dir
         self.__video_source = video_source
         self.__markers_length = markers_length
         self.__up_marker_id = up_marker_id
@@ -113,11 +113,11 @@ class MarkerCubeMapping:
                 side_up_transformations[side_marker_id] = []
                 if self.__down_marker_id != "":
                     down_side_transformations[side_marker_id] = []
-        if os.path.exists(self.__video_source_dir) and os.path.isfile("{}/cam_mtx.npy".format(self.__video_source_dir)) and os.path.isfile("{}/dist.npy".format(self.__video_source_dir)):
+        if os.path.exists(self.__calibration_dir) and os.path.isfile("{}/cam_mtx.npy".format(self.__calibration_dir)) and os.path.isfile("{}/dist.npy".format(self.__calibration_dir)):
             cam_mtx = np.load(
-                "{}/cam_mtx.npy".format(self.__video_source_dir))
+                "{}/cam_mtx.npy".format(self.__calibration_dir))
             dist = np.load(
-                "{}/dist.npy".format(self.__video_source_dir))
+                "{}/dist.npy".format(self.__calibration_dir))
         else:
             cam_mtx = np.load(
                 "../assets/camera_calibration_data/Default_calibration/cam_mtx.npy")
