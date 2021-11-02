@@ -441,11 +441,18 @@ class App():
         self.show_video.set(self.tracking_config.show_video)
         self.show_video_checkbox = tk.Checkbutton(
             self.publishing_config_frame, text="Show video", variable=self.show_video)
-        self.show_video_checkbox.grid(row=4, column=1, pady=5)
+        self.show_video_checkbox.grid(row=4, column=1, pady=0)
+
+        self.flip_video = tk.BooleanVar()
+        self.flip_video.set(self.tracking_config.flip_video)
+        self.flip_video_checkbox = tk.Checkbutton(
+            self.publishing_config_frame, text="Flip Video", variable=self.flip_video
+        )
+        self.flip_video_checkbox.grid(row=5, column=1)
 
         self.tracking_button = tk.Button(
             self.publishing_config_frame, text="Start Tracking", command=self.start_tracking)
-        self.tracking_button.grid(row=5, column=1, sticky=tk.N)
+        self.tracking_button.grid(row=6, column=1, sticky=tk.N, pady=5)
 
         self.menu_bar = tk.Menu(window)
         self.menu_help = tk.Menu(self.menu_bar, tearoff=0)

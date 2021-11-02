@@ -39,7 +39,8 @@ class TrackingScheduler:
             image_client_process = Process(target=ImagePublishClientUDP(
                 server_ip=tracking_config.video_server_ip,
                 server_port=int(tracking_config.video_server_port),
-                queue=frame_queue
+                queue=frame_queue,
+                flip_video=tracking_config.flip_video
             ).listen)
             image_client_process.start()
 
@@ -55,7 +56,8 @@ class TrackingScheduler:
             websocket_image_client_process = Process(target=ImagePublishWebsocketClient(
                 server_ip=tracking_config.websocket_video_server_ip,
                 server_port=tracking_config.websocket_video_server_port,
-                queue=websocket_frame_queue
+                queue=websocket_frame_queue,
+                flip_video=tracking_config.flip_video
             ).listen)
             websocket_image_client_process.start()
 
@@ -67,6 +69,7 @@ class TrackingScheduler:
                 device_number=tracking_config.device_number,
                 device_calibration_dir=tracking_config.device_calibration_dir,
                 show_video=tracking_config.show_video,
+                flip_video=tracking_config.flip_video,
                 marker_detection_settings=tracking_config.marker_detection_settings,
                 translation_offset=tracking_config.translation_offset).track)
             tracking_process.start()
@@ -101,6 +104,7 @@ class Tracking:
         self.__device_number = device_number
         self.__device_calibration_dir = device_calibration_dir
         self.__show_video = show_video
+        self.__flip_video = flip_video
         self.__marker_detection_settings = marker_detection_settings
         self.__translation_offset = translation_offset
         self.oscillation = False
@@ -325,6 +329,9 @@ class Tracking:
         cv2.setWindowProperty(
             win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
+        if self.__flip_video:
+            frame = cv2.flip(frame, 1)
+
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.6
         font_color = (0, 255, 0)
@@ -381,10 +388,11 @@ class DataPublishClientUDP:
 
 class ImagePublishClientUDP:
 
-    def __init__(self, server_ip, server_port, queue):
+    def __init__(self, server_ip, server_port, queue, flip_video):
         self.__server_ip = server_ip
         self.__server_port = server_port
         self.__queue = queue
+        self.__flip_video = flip_video
     
     def listen(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -392,8 +400,9 @@ class ImagePublishClientUDP:
 
         while True:
             frame = self.__queue.get()
-            _, frame = cv2.imencode(".jpg", frame, encode_param)
-            frame = pickle.dumps(frame, 0)
+            if self.__flip_video:
+                frame = cv2.flip(frame, 1)
+            frame = bytes(cv2.imencode(".jpg", frame, encode_param)[1].tostring())
             sock.sendto(frame, (self.__server_ip, self.__server_port))
 
 
@@ -420,10 +429,11 @@ class DataPublishWebsocketClient:
 
 class ImagePublishWebsocketClient:
 
-    def __init__(self, server_ip, server_port, queue):
+    def __init__(self, server_ip, server_port, queue, flip_video):
         self.__queue = queue
         self.__server_ip = server_ip
         self.__server_port = server_port
+        self.__flip_video = flip_video
     
     def listen(self):
         start_server = websockets.serve(self.time, self.__server_ip, self.__server_port, max_queue=1)
@@ -436,8 +446,9 @@ class ImagePublishWebsocketClient:
 
         while True:
             frame = self.__queue.get()
-            _, frame = cv2.imencode(".jpg", frame, encode_param)
-            frame = pickle.dumps(frame, 0)
+            if self.__flip_video:
+                frame = cv2.flip(frame, 1)
+            frame = bytes(cv2.imencode(".jpg", frame, encode_param)[1].tostring())
             await websocket.send(frame)
             await asyncio.sleep(0.016)
 
@@ -453,6 +464,7 @@ class TrackingCofig:
         self.calibration_number = calibration_number
         self.cube_number = cube_number
         self.show_video = show_video
+        self.flip_video = flip_video
         self.server_ip = server_ip
         self.server_port = server_port
         self.video_server_ip = video_server_ip
@@ -478,6 +490,7 @@ class TrackingCofig:
                            tracking_config_data['calibration_number'],
                            tracking_config_data['cube_number'],
                            tracking_config_data['show_video'],
+                           tracking_config_data['flip_video'],
                            tracking_config_data['server_ip'],
                            tracking_config_data['server_port'],
                            tracking_config_data['video_server_ip'],
@@ -500,6 +513,7 @@ class TrackingCofig:
                 'calibration_number': self.calibration_number,
                 'cube_number': self.cube_number,
                 'show_video': self.show_video,
+                'flip_video': self.flip_video,
                 'server_ip': self.server_ip,
                 'server_port': self.server_port,
                 'video_server_ip': self.video_server_ip,
