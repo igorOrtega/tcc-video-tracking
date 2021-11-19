@@ -1,3 +1,6 @@
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 import os
 import tkinter as tk
 from tkinter import messagebox
@@ -8,8 +11,8 @@ from tkinter.constants import ACTIVE, DISABLED
 from PIL import ImageTk, Image
 import socket
 import numpy as np
-from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 from tracking import TrackingScheduler, TrackingCofig
+from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 from marker_detection_settings import CUBE_DETECTION, SINGLE_DETECTION, SingleMarkerDetectionSettings, MarkersCubeDetectionSettings, MarkerCubeMapping
 import video_device_listing
 
@@ -65,7 +68,8 @@ class App():
 
         self.video_source = ttk.Combobox(
             self.video_source_frame, state="readonly", height=4, width=25)
-        self.video_source.bind('<<ComboboxSelected>>')
+        self.video_source.bind('<<ComboboxSelected>>', 
+                               self.refresh_calibrations)
         self.video_source.grid(row=2, column=1, padx=5, pady=5)
 
         self.video_source_calibration_frame = ttk.LabelFrame(
@@ -78,15 +82,27 @@ class App():
         self.calibration_selection_frame.grid(
             row=1, column=1, padx=5, pady=5)
         
-        self.calibration_selection = ttk.Combobox(
-            self.calibration_selection_frame, state="readonly", height=4, width=25)
-        self.calibration_selection.bind('<<ComboboxSelected>>',
-                               self.calibration_selected)
-        self.calibration_selection.grid(row=1, column=1)
+        self.author_label = tk.Label(
+            self.calibration_selection_frame, text='Author:')
+        self.author_label.grid(row=0, column=0)
+        self.author = tk.StringVar()
+        self.author.trace('w', lambda name, index, mode, var=self.author: self.author_updated())
+        self.author_entry = tk.Entry(
+            self.calibration_selection_frame, textvariable=self.author, width=28, state=DISABLED)
+        self.author_entry.grid(row=0, column=1)
 
         self.new_calibration_button = tk.Button(
             self.calibration_selection_frame, text="New", command=self.add_calibration)
-        self.new_calibration_button.grid(row=1, column=2, padx=5)
+        self.new_calibration_button.grid(row=0, column=2, padx=5)
+        
+        self.calibration_label = tk.Label(
+            self.calibration_selection_frame, text='Name:')
+        self.calibration_label.grid(row=1, column=0)
+        self.calibration_selection = ttk.Combobox(
+            self.calibration_selection_frame, state="readonly", height=4, width=25)
+        self.calibration_selection.bind('<<ComboboxSelected>>',
+                                        self.calibration_selected)
+        self.calibration_selection.grid(row=1, column=1)
 
         self.calibration_chessboard_parameters_frame = tk.Frame(
             self.video_source_calibration_frame)
@@ -112,7 +128,7 @@ class App():
         self.calibration_buttons_frame.grid(row=3, column=1, pady=5)
 
         self.calibrate_button = tk.Button(
-            self.calibration_buttons_frame, text="Calibrate", command=self.calibrate, state=DISABLED)
+            self.calibration_buttons_frame, text="Add Calibration to database", command=self.add_calibration_to_database, state=DISABLED)
         self.calibrate_button.grid(row=1, column=1, padx=5)
 
         self.delete_button = tk.Button(
@@ -462,13 +478,13 @@ class App():
         window.config(menu=self.menu_bar)
 
         self.calibration = None
-        self.calibrations_list = []
-        self.calibration_selection_init()
         self.cube_ids = []
         self.cube_ids_init()
         self.video_source_list = []
         self.refresh_video_sources()
         self.video_source.current(self.tracking_config.device_number) #selects the last camera used by the AR Tracking
+        self.calibrations_list = []
+        self.calibration_selection_init()
         self.icon_img = ImageTk.PhotoImage(Image.open("{}/error_icon.png".format(self.base_img_dir)))
 
     def single_marker_settings_selection(self):
@@ -593,11 +609,11 @@ class App():
 
     def marker_cube_map(self):
         try:
-            detection = MarkerCubeMapping(self.cube_id_selection.get(), self.get_video_source_dir(), self.video_source.current(),
+            detection = MarkerCubeMapping(self.cube_id_selection.get(), self.calibration_selection.get(), self.video_source.current(),
                                         self.cube_markers_length.get(), self.cube_up_marker_id.get(),
                                         [self.cube_side_marker_1.get(), self.cube_side_marker_2.get(
                                         ), self.cube_side_marker_3.get(), self.cube_side_marker_4.get()],
-                                        self.cube_down_marker_id.get())
+                                        self.cube_down_marker_id.get(), db)
 
             detection.map()
             self.marker_cube_settings = MarkersCubeDetectionSettings.persisted(
@@ -673,6 +689,7 @@ class App():
         try:
             self.save_tracking_config()
             self.single_marker_save()
+            self.save_camera_parameters()
             if not self.saving_error:
                 self.start_tracking_event.set()
 
@@ -750,26 +767,58 @@ class App():
         self.stop_tracking_event.set()
         self.tracking_button['text'] = "Start Tracking"
         self.tracking_button['command'] = self.start_tracking
+    
+    def refresh_calibrations(self, _=None):
+        self.calibrations_list = []
+        for calibration_select in os.listdir(self.base_video_source_dir):
+            if calibration_select.find(self.video_source.get()) != -1:
+                self.calibrations_list.append(calibration_select)
+        
+        calibrations = db.collection('Calibragens').where('camera', '==', self.video_source.get()).get()
+        print(calibrations)
+        for calibration in calibrations:
+            if calibration.to_dict().get('name', "") not in self.calibrations_list:
+                self.calibrations_list.append(calibration.to_dict().get('name', ""))
+        
+        if self.calibrations_list.__contains__(""):
+            self.calibrations_list.remove("")
+        
+        self.calibration_selection['values'] = sorted(self.calibrations_list, key=str.lower)
+        if len(self.calibrations_list) > 0:
+            self.calibration_selection.current(0)
+            self.calibration_selected()
 
     def calibration_selection_init(self):
-        for calibration_select in os.listdir(self.base_video_source_dir):
-            self.calibrations_list.append(calibration_select)
-
-        self.calibration_selection['values'] = self.calibrations_list
+        self.refresh_calibrations()
 
         if len(self.calibrations_list) > 0:
             self.calibration_selection.current(self.tracking_config.calibration_number) #selects the last calibration used by the AR Tracking
+            self.calibration_selected()
+        else:
+            self.calibration_selection.set("")
+
+    def calibration_selected(self, _=None):
+        if self.calibration_selection.get() in os.listdir(self.base_video_source_dir):
             self.calibration_config = VideoSourceCalibrationConfig.persisted(
                 self.get_calibration_dir())
             self.chessboard_square_size.set(self.calibration_config.chessboard_square_size)
-        else:
-            self.calibration_selection.set("") 
+            if self.calibration_config.score >= 7:
+                self.calibrate_button['state'] = ACTIVE
+            else:
+                self.calibrate_button['state'] = DISABLED
 
-    def calibration_selected(self, _=None):
-        self.calibration_config = VideoSourceCalibrationConfig.persisted(
-            self.get_calibration_dir())
-        self.chessboard_square_size.set(self.calibration_config.chessboard_square_size)
+        elif self.calibration_selection.get() != "":    
+            docs = db.collection('Calibragens').where('name', '==', self.calibration_selection.get()).where('camera', '==', self.video_source.get()).get()
+            calibration = docs[0].to_dict()
+            self.chessboard_square_size.set(calibration.get('chessboard square size'))
+            if calibration.get('score') >= 7:
+                self.calibrate_button['state'] = ACTIVE
+            else:
+                self.calibrate_button['state'] = DISABLED
 
+    def author_updated(self):
+        self.calibration_selection.set('{}-3-{}'.format(self.video_source.get(), self.author.get()))
+    
     def add_calibration(self):
         if self.calibrations_list.__contains__(""):
             self.calibrations_list.remove("")
@@ -777,9 +826,11 @@ class App():
         self.calibrations_list.append("")
         self.calibration_selection['values'] = self.calibrations_list
         self.calibration_selection.current(len(self.calibrations_list) - 1)
-        self.calibration_selected()
-        self.calibration_selection['state'] = 'normal'
+        self.calibration_selection.set('{}-3-{}'.format(self.video_source.get(), self.author.get()))
+        self.author_entry['state'] = 'normal'
         self.chessboard_square_size_entry['state'] = ACTIVE
+        self.chessboard_square_size.set("")
+        self.calibrate_button.configure(text='Calibrate', command=self.calibrate)
         self.calibrate_button['state'] = ACTIVE
     
     def calibrate(self):
@@ -787,10 +838,12 @@ class App():
             self.calibration = VideoSourceCalibration(
                 self.get_calibration_dir(), self.video_source.current(), self.chessboard_square_size.get())
 
-            self.calibration.calibrate()
-            self.save_calibration_config()
+            calibration_score = self.calibration.calibrate()
+            self.save_calibration_config(calibration_score)
             self.calibration_selection['state'] = 'readonly'
+            self.author_entry['state'] = DISABLED
             self.chessboard_square_size_entry['state'] = DISABLED
+            self.calibrate_button.configure(text='Add Calibration to database', command=self.add_calibration_to_database)
             self.calibrate_button['state'] = DISABLED
 
             if not self.calibrations_list.__contains__(self.calibration_selection.get()):
@@ -800,6 +853,11 @@ class App():
                     self.calibrations_list.remove("")
             
             self.calibration_selection['values'] = sorted(self.calibrations_list, key=str.lower)
+            if calibration_score >= 7:
+                self.calibrate_button['state'] = ACTIVE
+                msg_box = tk.messagebox.askquestion('Add calibration to database', 'Congratulations!! \nYou have just created a calibration that surpasses the minimum score required to add it to our database. By adding the calibration to the database you help to improve the experience of other users so they don\'t need to create a new calibration. \nWould you like to add the calibration ' + self.calibration_selection.get() + ' to the database?')
+                if msg_box == 'yes':
+                    print('Add calibration to database')
         except tk.TclError:
             error_window = tk.Toplevel()
             error_window.title("Calibration Error")
@@ -822,6 +880,26 @@ class App():
                                      justify="left", font=("Arial", 11))
             error_message.grid(row=1, column=1)
 
+    def add_calibration_to_database(self):
+        calibration_dir = self.get_calibration_dir()
+        if os.path.exists(calibration_dir) and os.path.isfile("{}/cam_mtx.npy".format(calibration_dir)) and os.path.isfile("{}/dist.npy".format(calibration_dir)):
+            cam_mtx = np.load(
+                "{}/cam_mtx.npy".format(calibration_dir))
+            dist = np.load(
+                "{}/dist.npy".format(calibration_dir))
+        self.calibration_config = VideoSourceCalibrationConfig.persisted(calibration_dir)
+        docs = db.collection('Calibragens').where('camera', '==', self.video_source.get()).get()
+        num_calibrations = len(docs)
+        name =  '{}-{}-Lucca'.format(self.video_source.get(), num_calibrations)
+
+        data = {'camera': self.video_source.get(), 
+                'camera matrix': [cam_mtx[0][0], cam_mtx[1][1], cam_mtx[0][2], cam_mtx[1][2]], 
+                'chessboard square size': self.calibration_config.chessboard_square_size, 
+                'distortion coefficients': [dist[0][0], dist[0][1], dist[0][2], dist[0][3], dist[0][4]], 
+                'name': name, 
+                'score': self.calibration_config.score}
+        db.collection('Calibragens').add(data)
+    
     def delete_calibration(self):
         msg_box = tk.messagebox.askquestion('Delete confirmation', 'Are you sure you want to delete ' + self.calibration_selection.get() + '?')
         if msg_box == 'yes':
@@ -851,29 +929,32 @@ class App():
                 self.calibration_selection.set("")
 
             self.calibration_selected()
+        self.author_entry['state'] = DISABLED
         self.chessboard_square_size_entry['state'] = DISABLED
 
-    def check_video_source_calibration(self):
-        if os.path.exists(self.get_video_source_dir()):
-            cam_mtx_exists = os.path.isfile(
-                '{}/cam_mtx.npy'.format(self.get_video_source_dir()))
-            dist_exists = os.path.isfile(
-                '{}/dist.npy'.format(self.get_video_source_dir()))
+    def save_camera_parameters(self):
+        calibration_dir = self.get_calibration_dir()
+        if os.path.exists(calibration_dir) and os.path.isfile("{}/cam_mtx.npy".format(calibration_dir)) and os.path.isfile("{}/dist.npy".format(calibration_dir)):
+            cam_mtx = np.load(
+                "{}/cam_mtx.npy".format(calibration_dir))
+            dist = np.load(
+                "{}/dist.npy".format(calibration_dir))
+            
+            np.save('../assets/configs/selected_cam_mtx.npy', cam_mtx)
+            np.save('../assets/configs/selected_dist.npy', dist)
         else:
-            return False
+            docs = db.collection('Calibragens').where('name', '==', self.calibration_selection.get()).get()
+            if len(docs) == 1:
+                calibration = docs[0].to_dict()
+                cam_mtx = np.array([[calibration['camera matrix'][0], 0                              ,  calibration['camera matrix'][2]],
+                                    [0                              , calibration['camera matrix'][1],  calibration['camera matrix'][3]],
+                                    [0                              , 0                              , 1                               ]])
+                dist = np.array([calibration['distortion coefficients']])
 
-        return cam_mtx_exists & dist_exists
-    
-    def check_default_calibration(self):
-        if os.path.exists('../assets/camera_calibration_data/Default_calibration'):
-            cam_mtx_exists = os.path.isfile(
-                '../assets/camera_calibration_data/Default_calibration/cam_mtx.npy')
-            dist_exists = os.path.isfile(
-                '../assets/camera_calibration_data/Default_calibration/dist.npy')
-        else:
-            return False
-
-        return cam_mtx_exists & dist_exists 
+                np.save('../assets/configs/selected_cam_mtx.npy', cam_mtx)
+                np.save('../assets/configs/selected_dist.npy', dist)
+            else:
+                print('Nome repetido')
 
     def get_video_source_dir(self):
         camera_identification = self.video_source.get().replace(" ", "_")
@@ -931,9 +1012,9 @@ class App():
 
         self.tracking_config.persist()
 
-    def save_calibration_config(self):
+    def save_calibration_config(self, calibration_score):
         self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
-        self.calibration_config.persist(self.get_calibration_dir())
+        self.calibration_config.persist(self.get_calibration_dir(), calibration_score)
 
     def create_about_window(self):
         about_window = tk.Toplevel()
@@ -946,6 +1027,10 @@ class App():
         credits_label.grid(sticky='nw')
 
 if __name__ == "__main__":
+    cred = credentials.Certificate("../ar-tracking-database-fe091-firebase-adminsdk-w2gku-33bbfd844a.json")
+    firebase_admin.initialize_app(cred)
+    db=firestore.client()
+    
     multiprocessing.freeze_support()
 
     start_tracking_event = multiprocessing.Event()

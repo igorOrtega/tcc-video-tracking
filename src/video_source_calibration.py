@@ -77,12 +77,12 @@ class VideoSourceCalibration:
 
             if start_calibration:
                 cv2.waitKey(2000)
-                self.__run(calibration_frames)
+                score = self.__run(calibration_frames)
                 cv2.imshow(win_name, frame)
                 cv2.waitKey(1000)
                 video_capture.release()
                 cv2.destroyAllWindows()
-                break
+                return score
 
             if option == ord('q'):
                 video_capture.release()
@@ -110,21 +110,33 @@ class VideoSourceCalibration:
                     frame, corners, (11, 11), (-1, -1), self.__criteria)
                 imgpoints.append(corners2)
 
-        ret_val, cam_mtx, dist, _, _ = cv2.calibrateCamera(
+        ret_val, cam_mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
             objpoints, imgpoints, img_size, None, None)
 
         if ret_val:
+            mean_error = 0
+            for i in range(len(objpoints)):
+                imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], cam_mtx, dist)
+                error = cv2.norm(imgpoints[i], imgpoints2, cv2.NORM_L2)/len(imgpoints2)
+                mean_error += error
+            
             if not os.path.exists(self.__calibration_dir):
                 os.makedirs(self.__calibration_dir)
 
             np.save('{}/cam_mtx.npy'.format(self.__calibration_dir), cam_mtx)
             np.save('{}/dist.npy'.format(self.__calibration_dir), dist)
 
+            if (mean_error/len(objpoints)) < 1: 
+                return 10 - 10*(mean_error/len(objpoints))
+            else:
+                return 0
+
 
 class VideoSourceCalibrationConfig:
 
-    def __init__(self, chessboard_square_size):
+    def __init__(self, chessboard_square_size, score):
         self.chessboard_square_size = chessboard_square_size
+        self.score = score
 
     @classmethod
     def persisted(cls, calibration_dir):
@@ -134,12 +146,14 @@ class VideoSourceCalibrationConfig:
         try:
             with open('{}/calibration_config_data.pkl'.format(calibration_dir), 'rb') as file:
                 calibration_config_data = pickle.load(file)
-                return cls(calibration_config_data['chessboard_square_size'])
+                return cls(calibration_config_data['chessboard_square_size'],
+                           calibration_config_data['score'])
         except FileNotFoundError:
-            return cls("")
+            return cls("", "")
 
-    def persist(self, calibration_dir):
+    def persist(self, calibration_dir, score):
         # Overwrites any existing file.
         with open('{}/calibration_config_data.pkl'.format(calibration_dir), 'wb+') as output:
             pickle.dump({
-                'chessboard_square_size': self.chessboard_square_size}, output, pickle.HIGHEST_PROTOCOL)
+                'chessboard_square_size': self.chessboard_square_size,
+                'score': score}, output, pickle.HIGHEST_PROTOCOL)

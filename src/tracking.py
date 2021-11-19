@@ -2,7 +2,7 @@ try:
     import cPickle as pickle
 except ModuleNotFoundError:
     import pickle
-
+    
 import os
 import json
 import socket
@@ -67,7 +67,6 @@ class TrackingScheduler:
                 frame_queue=frame_queue,
                 websocket_frame_queue=websocket_frame_queue,
                 device_number=tracking_config.device_number,
-                device_calibration_dir=tracking_config.device_calibration_dir,
                 show_video=tracking_config.show_video,
                 flip_video=tracking_config.flip_video,
                 marker_detection_settings=tracking_config.marker_detection_settings,
@@ -96,13 +95,12 @@ class TrackingScheduler:
 
 
 class Tracking:
-    def __init__(self, queue, websocket_queue, frame_queue, websocket_frame_queue, device_number, device_calibration_dir, show_video, flip_video, marker_detection_settings, translation_offset):
+    def __init__(self, queue, websocket_queue, frame_queue, websocket_frame_queue, device_number, show_video, flip_video, marker_detection_settings, translation_offset):
         self.__data_queue = queue
         self.__data_queue_websocket = websocket_queue
         self.__frame_queue = frame_queue
         self.__frame_queue_websocket = websocket_frame_queue
         self.__device_number = device_number
-        self.__device_calibration_dir = device_calibration_dir
         self.__show_video = show_video
         self.__flip_video = flip_video
         self.__marker_detection_settings = marker_detection_settings
@@ -186,7 +184,7 @@ class Tracking:
         main_marker_rvec = None
         main_marker_tvec = None
         if np.all(ids is not None):
-
+            
             cam_mtx, dist = self.__camera_parameters()
             rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
                 corners, float(self.__marker_detection_settings.markers_length), cam_mtx, dist)
@@ -232,17 +230,12 @@ class Tracking:
         return corners, ids
 
     def __camera_parameters(self):
-        if os.path.exists(self.__device_calibration_dir) and os.path.isfile('{}/cam_mtx.npy'.format(self.__device_calibration_dir)) and os.path.isfile('{}/dist.npy'.format(self.__device_calibration_dir)):
+        if os.path.exists('../assets/configs/') and os.path.isfile('../assets/configs/selected_cam_mtx.npy') and os.path.isfile('../assets/configs/selected_dist.npy'):
             cam_mtx = np.load(
-                "{}/cam_mtx.npy".format(self.__device_calibration_dir))
+                '../assets/configs/selected_cam_mtx.npy')
             dist = np.load(
-                "{}/dist.npy".format(self.__device_calibration_dir))
-        else:
-            cam_mtx = np.load(
-                "../assets/camera_calibration_data/Default_calibration/cam_mtx.npy")
-            dist = np.load(
-                "../assets/camera_calibration_data/Default_calibration/dist.npy")
-
+                '../assets/configs/selected_dist.npy')
+        
         return cam_mtx, dist
 
     def __get_position_matrix(self, rvec, tvec):

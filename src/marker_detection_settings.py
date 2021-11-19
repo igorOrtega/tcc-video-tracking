@@ -84,9 +84,10 @@ class MarkersCubeDetectionSettings():
 
 class MarkerCubeMapping:
 
-    def __init__(self, cube_id, calibration_dir, video_source, markers_length, up_marker_id, side_marker_ids, down_marker_id):
+    def __init__(self, cube_id, calibration_name, video_source, markers_length, up_marker_id, side_marker_ids, down_marker_id, database):
         self.__cube_id = cube_id
-        self.__calibration_dir = calibration_dir
+        self.__calibration_name = calibration_name
+        self.__calibration_dir = '{}/{}'.format('../assets/camera_calibration_data', calibration_name)
         self.__video_source = video_source
         self.__markers_length = markers_length
         self.__up_marker_id = up_marker_id
@@ -103,6 +104,7 @@ class MarkerCubeMapping:
             self.__down_marker_id = down_marker_id
 
         self.__acquire_min_count = 100
+        self.__db = database
 
     def map(self):
         side_up_transformations = {}
@@ -116,13 +118,19 @@ class MarkerCubeMapping:
         if os.path.exists(self.__calibration_dir) and os.path.isfile("{}/cam_mtx.npy".format(self.__calibration_dir)) and os.path.isfile("{}/dist.npy".format(self.__calibration_dir)):
             cam_mtx = np.load(
                 "{}/cam_mtx.npy".format(self.__calibration_dir))
+            print(cam_mtx)
             dist = np.load(
                 "{}/dist.npy".format(self.__calibration_dir))
         else:
-            cam_mtx = np.load(
-                "../assets/camera_calibration_data/Default_calibration/cam_mtx.npy")
-            dist = np.load(
-                "../assets/camera_calibration_data/Default_calibration/dist.npy")
+            docs = self.__db.collection('Calibragens').where('name', '==', self.__calibration_name).get()
+            if len(docs) == 1:
+                calibration = docs[0].to_dict()
+                cam_mtx = np.array([[calibration['camera matrix'][0], 0                              ,  calibration['camera matrix'][2]],
+                                    [0                              , calibration['camera matrix'][1],  calibration['camera matrix'][3]],
+                                    [0                              , 0                              , 1                               ]])
+                dist = np.array([calibration['distortion coefficients']])
+            else:
+                print('Nome repetido')
 
         win_name = "Markers Cube Calibration Image Capture"
         cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
@@ -132,6 +140,7 @@ class MarkerCubeMapping:
         #Descomentar quando nao for utilizar o DroidCam
         #video_capture = cv2.VideoCapture(self.__video_source, cv2.CAP_DSHOW)
         video_capture = cv2.VideoCapture(self.__video_source)
+
         video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
