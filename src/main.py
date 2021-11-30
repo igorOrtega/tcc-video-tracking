@@ -67,7 +67,7 @@ class App():
         self.refresh_video_sources_button.grid(row=1, column=1, pady=5)
 
         self.video_source = ttk.Combobox(
-            self.video_source_frame, state="readonly", height=4, width=25)
+            self.video_source_frame, state="readonly", height=4, width=72)
         self.video_source.bind('<<ComboboxSelected>>', 
                                self.refresh_calibrations)
         self.video_source.grid(row=2, column=1, padx=5, pady=5)
@@ -88,28 +88,34 @@ class App():
         self.author = tk.StringVar()
         self.author.trace('w', lambda name, index, mode, var=self.author: self.author_updated())
         self.author_entry = tk.Entry(
-            self.calibration_selection_frame, textvariable=self.author, width=28, state=DISABLED)
+            self.calibration_selection_frame, textvariable=self.author, width=55, state=DISABLED)
         self.author_entry.grid(row=0, column=1)
 
         self.new_calibration_button = tk.Button(
-            self.calibration_selection_frame, text="New", command=self.add_calibration)
+            self.calibration_selection_frame, text="New", command=self.add_calibration, width=6)
         self.new_calibration_button.grid(row=0, column=2, padx=5)
         
         self.calibration_label = tk.Label(
             self.calibration_selection_frame, text='Name:')
         self.calibration_label.grid(row=1, column=0)
         self.calibration_selection = ttk.Combobox(
-            self.calibration_selection_frame, state="readonly", height=4, width=25)
+            self.calibration_selection_frame, state="readonly", height=4, width=52)
         self.calibration_selection.bind('<<ComboboxSelected>>',
                                         self.calibration_selected)
         self.calibration_selection.grid(row=1, column=1)
+
+        self.calibration_config = VideoSourceCalibrationConfig.persisted(self.get_calibration_dir())
+        
+        self.score_text = tk.StringVar()
+        self.score_text.set('Score: {:.2f}'.format(self.calibration_config.score))
+        self.score_label = tk.Label(
+            self.calibration_selection_frame, textvariable=self.score_text)
+        self.score_label.grid(row=1, column=2)
 
         self.calibration_chessboard_parameters_frame = tk.Frame(
             self.video_source_calibration_frame)
         self.calibration_chessboard_parameters_frame.grid(
             row=2, column=1, padx=5)
-
-        self.calibration_config = VideoSourceCalibrationConfig.persisted(self.get_calibration_dir())
 
         self.chessboard_square_size = tk.DoubleVar()
         self.chessboard_square_size.set(
@@ -811,12 +817,18 @@ class App():
             self.calibration_config = VideoSourceCalibrationConfig.persisted(
                 self.get_calibration_dir())
             self.chessboard_square_size.set(self.calibration_config.chessboard_square_size)
+            self.score_text.set('Score: {:.2f}'.format(self.calibration_config.score))
+            self.delete_button['state'] = ACTIVE
             if self.calibration_config.score >= 7:
                 self.calibrate_button['state'] = ACTIVE
+                for calibration in self.database_calibrations:
+                    if self.calibration_selection.get() == calibration.to_dict().get('name', ''):
+                        self.calibrate_button['state'] = DISABLED
             else:
                 self.calibrate_button['state'] = DISABLED
 
         elif self.calibration_selection.get() != "":
+            self.delete_button['state'] = DISABLED
             self.calibrate_button['state'] = DISABLED
             for calibration in self.database_calibrations:
                 if calibration.to_dict().get('name', '') == self.calibration_selection.get():
