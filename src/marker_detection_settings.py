@@ -84,7 +84,7 @@ class MarkersCubeDetectionSettings():
 
 class MarkerCubeMapping:
 
-    def __init__(self, cube_id, calibration_name, video_source, markers_length, up_marker_id, side_marker_ids, down_marker_id, database):
+    def __init__(self, cube_id, calibration_name, video_source, markers_length, up_marker_id, side_marker_ids, down_marker_id, database_calibrations):
         self.__cube_id = cube_id
         self.__calibration_name = calibration_name
         self.__calibration_dir = '{}/{}'.format('../assets/camera_calibration_data', calibration_name)
@@ -104,7 +104,7 @@ class MarkerCubeMapping:
             self.__down_marker_id = down_marker_id
 
         self.__acquire_min_count = 100
-        self.__db = database
+        self.__database_calibrations = database_calibrations
 
     def map(self):
         side_up_transformations = {}
@@ -122,15 +122,13 @@ class MarkerCubeMapping:
             dist = np.load(
                 "{}/dist.npy".format(self.__calibration_dir))
         else:
-            docs = self.__db.collection('Calibragens').where('name', '==', self.__calibration_name).get()
-            if len(docs) == 1:
-                calibration = docs[0].to_dict()
-                cam_mtx = np.array([[calibration['camera matrix'][0], 0                              ,  calibration['camera matrix'][2]],
-                                    [0                              , calibration['camera matrix'][1],  calibration['camera matrix'][3]],
-                                    [0                              , 0                              , 1                               ]])
-                dist = np.array([calibration['distortion coefficients']])
-            else:
-                print('Nome repetido')
+            for calibration in self.__database_calibrations:
+                if calibration.to_dict().get('name', '') == self.__calibration_name:
+                    calibration_dict = calibration.to_dict()
+                    cam_mtx = np.array([[calibration_dict['camera matrix'][0], 0                              ,  calibration_dict['camera matrix'][2]],
+                                        [0                              , calibration_dict['camera matrix'][1],  calibration_dict['camera matrix'][3]],
+                                        [0                              , 0                              , 1                               ]])
+                    dist = np.array([calibration_dict['distortion coefficients']])
 
         win_name = "Markers Cube Calibration Image Capture"
         cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
