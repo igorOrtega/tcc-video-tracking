@@ -131,6 +131,120 @@ class VideoSourceCalibration:
             else:
                 return 0
 
+    def test(self):
+        win_name = "Calibration Test Image Capture"
+        cv2.namedWindow(win_name, cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty(
+            win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        red = (0, 0, 255)
+        green = (0, 255, 0)
+
+        #if self.__calibration_dir.find('DroidCam_Source') != -1:
+        #    video_capture = cv2.VideoCapture(self.__video_source)
+        #else:
+        #    video_capture = cv2.VideoCapture(self.__video_source, cv2.CAP_DSHOW)
+        
+        video_capture = cv2.VideoCapture(self.__video_source)
+
+        video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+        calibration_frames = []
+        ready_to_test = False
+        start_test = False
+        status_color = red
+        while True:
+            option = cv2.waitKey(1)
+
+            _, frame = video_capture.read()
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            cv2.putText(frame, "test image count: {}. Minimum 10".format(
+                len(calibration_frames)), (0, 20), font, font_scale, status_color, 2, cv2.LINE_AA)
+
+            cv2.putText(frame, "ENTER - Capture frame for test", (0, 40),
+                        font, font_scale, green, 2, cv2.LINE_AA)
+
+            if option == 13:
+                found, _ = cv2.findChessboardCorners(gray, (9, 6), None)
+
+                if found:
+                    calibration_frames.append(gray)
+
+            if ready_to_test:
+                cv2.putText(frame, "C - Start Test", (0, 60),
+                            font, font_scale, green, 2, cv2.LINE_AA)
+
+                if option == ord('c'):
+                    start_test = True
+                    cv2.putText(frame, "Running, this may take a while ...", (0, 80),
+                                font, font_scale, green, 2, cv2.LINE_AA)
+
+            cv2.putText(frame, "Q - Quit ", (0, 105), font,
+                        font_scale, green, 2, cv2.LINE_AA)
+
+            cv2.imshow(win_name, frame)
+
+            if start_test:
+                cv2.waitKey(2000)
+                score = self.__run_test(calibration_frames)
+                cv2.imshow(win_name, frame)
+                cv2.waitKey(1000)
+                video_capture.release()
+                cv2.destroyAllWindows()
+                return score
+
+            if option == ord('q'):
+                video_capture.release()
+                cv2.destroyAllWindows()
+                break
+
+            if len(calibration_frames) >= 10:
+                ready_to_test = True
+                status_color = green
+
+    def __run_test(self, calibration_frames):
+        if os.path.exists('../assets/configs/') and os.path.isfile('../assets/configs/selected_cam_mtx.npy') and os.path.isfile('../assets/configs/selected_dist.npy'):
+            cam_mtx = np.load(
+                '../assets/configs/selected_cam_mtx.npy')
+            dist = np.load(
+                '../assets/configs/selected_dist.npy')
+        
+            objp = np.zeros((9*6, 3), np.float32)
+            objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)*float(
+                self.__chessboard_square_size)
+
+            objpoints = []
+            imgpoints = []
+
+            img_size = calibration_frames[0].shape[::-1]
+            for frame in calibration_frames:
+                found, corners = cv2.findChessboardCorners(frame, (9, 6), None)
+                if found:
+                    objpoints.append(objp)
+                    corners2 = cv2.cornerSubPix(
+                        frame, corners, (11, 11), (-1, -1), self.__criteria)
+                    imgpoints.append(corners2)
+
+            ret_val, _, _, rvecs, tvecs = cv2.calibrateCamera(
+                objpoints, imgpoints, img_size, None, None)
+
+            if ret_val:
+                mean_error = 0
+                for i in range(len(objpoints)):
+                    imgpoints2, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], cam_mtx, dist)
+                    error = cv2.norm(imgpoints[i], imgpoints2, cv2.NORM_L2)/len(imgpoints2)
+                    mean_error += error
+
+                if (mean_error/len(objpoints)) < 1: 
+                    return 10 - 10*(mean_error/len(objpoints))
+                else:
+                    print(0)
+                    return 0
 
 class VideoSourceCalibrationConfig:
 
@@ -149,7 +263,7 @@ class VideoSourceCalibrationConfig:
                 return cls(calibration_config_data['chessboard_square_size'],
                            calibration_config_data['score'])
         except FileNotFoundError:
-            return cls("", "")
+            return cls("", 0)
 
     def persist(self, calibration_dir, score):
         # Overwrites any existing file.
