@@ -67,7 +67,7 @@ class App():
         self.refresh_video_sources_button.grid(row=1, column=1, pady=5)
 
         self.video_source = ttk.Combobox(
-            self.video_source_frame, state="readonly", height=4, width=72)
+            self.video_source_frame, state="readonly", height=4, width=40)
         self.video_source.bind('<<ComboboxSelected>>', 
                                self.refresh_calibrations)
         self.video_source.grid(row=2, column=1, padx=5, pady=5)
@@ -134,11 +134,11 @@ class App():
         self.calibration_buttons_frame.grid(row=3, column=1, pady=5)
 
         self.calibrate_button = tk.Button(
-            self.calibration_buttons_frame, text="Add Calibration to database", command=self.add_calibration_to_database, state=DISABLED)
+            self.calibration_buttons_frame, text="Add calibration to database", command=self.add_calibration_to_database, state=DISABLED)
         self.calibrate_button.grid(row=1, column=1, padx=5)
 
         self.test_button = tk.Button(
-            self.calibration_buttons_frame, text="Test calibration", command=self.test_calibration, state=ACTIVE)
+            self.calibration_buttons_frame, text="Test calibration", command=self.enable_chessboard_entry, state=ACTIVE)
         self.test_button.grid(row=1, column=2, padx=5)
         
         self.delete_button = tk.Button(
@@ -851,6 +851,7 @@ class App():
         self.calibrate_button.configure(text='Calibrate', command=self.calibrate)
         self.calibrate_button['state'] = ACTIVE
         self.test_button['state'] = DISABLED
+        self.delete_button['state'] = ACTIVE
     
     def calibrate(self):
         try:    
@@ -861,7 +862,7 @@ class App():
             self.save_calibration_config(calibration_score)
             self.author_entry['state'] = DISABLED
             self.chessboard_square_size_entry['state'] = DISABLED
-            self.calibrate_button.configure(text='Add Calibration to database', command=self.add_calibration_to_database)
+            self.calibrate_button.configure(text='Add calibration to database', command=self.add_calibration_to_database)
             self.calibrate_button['state'] = DISABLED
             self.test_button['state'] = ACTIVE
 
@@ -923,11 +924,31 @@ class App():
         self.database_calibrations = db.collection('Calibragens').where('camera', '==', self.video_source.get()).get()
         self.calibrate_button['state'] = DISABLED
     
-    def test_calibration(self):
+    def enable_chessboard_entry(self):
+        self.test_button['state'] = DISABLED
+        self.chessboard_square_size_entry['state'] = ACTIVE
+        self.chessboard_square_size_entry.bind('<Return>', self.test_calibration)
+    
+    def test_calibration(self, event):
         self.calibration = VideoSourceCalibration(
                 self.get_calibration_dir(), self.video_source.current(), self.chessboard_square_size.get())
         self.save_camera_parameters()
-        self.calibration.test()
+        score = self.calibration.test()
+        if score != -1:
+            result_window = tk.Toplevel()
+            result_window.title("Test Result")
+            result_window.grab_set()
+            result_window.resizable(0, 0)
+            score_label = tk.Label(master=result_window, text='Final score: {:.2f}'.format(score), font=("Arial", 18, 'bold'))
+            score_label.grid(row=0, column= 0, pady=5)
+            if score >= 7:
+                calibration_label = tk.Label(master=result_window, text='{} is a good calibration for your camera.'.format(self.calibration_selection.get()), font=('Arial', 11), fg='green')
+            else:
+                calibration_label = tk.Label(master=result_window, text='{} is a bad calibration for your camera.'.format(self.calibration_selection.get()), font=('Arial', 11), fg='red')
+            calibration_label.grid(row=1, column=0, pady=5)
+        self.chessboard_square_size_entry['state'] = DISABLED
+        self.chessboard_square_size_entry.unbind('<Return>')
+        self.test_button['state'] = ACTIVE
     
     def delete_calibration(self):
         msg_box = tk.messagebox.askquestion('Delete confirmation', 'Are you sure you want to delete ' + self.calibration_selection.get() + '?')
@@ -963,7 +984,8 @@ class App():
             self.calibration_selected()
         self.author_entry['state'] = DISABLED
         self.chessboard_square_size_entry['state'] = DISABLED
-        self.calibrate_button.configure(text='Add Calibration to database', command=self.add_calibration_to_database)
+        self.calibrate_button.configure(text='Add calibration to database', command=self.add_calibration_to_database)
+        self.test_button['state'] = ACTIVE
 
 
     def save_camera_parameters(self):

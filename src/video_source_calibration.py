@@ -201,7 +201,7 @@ class VideoSourceCalibration:
             if option == ord('q'):
                 video_capture.release()
                 cv2.destroyAllWindows()
-                break
+                return -1
 
             if len(calibration_frames) >= 10:
                 ready_to_test = True
@@ -220,8 +220,9 @@ class VideoSourceCalibration:
 
             objpoints = []
             imgpoints = []
+            rvecs = []
+            tvecs = []
 
-            img_size = calibration_frames[0].shape[::-1]
             for frame in calibration_frames:
                 found, corners = cv2.findChessboardCorners(frame, (9, 6), None)
                 if found:
@@ -229,9 +230,9 @@ class VideoSourceCalibration:
                     corners2 = cv2.cornerSubPix(
                         frame, corners, (11, 11), (-1, -1), self.__criteria)
                     imgpoints.append(corners2)
-
-            ret_val, _, _, rvecs, tvecs = cv2.calibrateCamera(
-                objpoints, imgpoints, img_size, None, None)
+                    ret_val, rvec, tvec = cv2.solvePnP(objp, corners2, cam_mtx, dist)
+                    rvecs.append(rvec)
+                    tvecs.append(tvec)
 
             if ret_val:
                 mean_error = 0
@@ -243,7 +244,6 @@ class VideoSourceCalibration:
                 if (mean_error/len(objpoints)) < 1: 
                     return 10 - 10*(mean_error/len(objpoints))
                 else:
-                    print(0)
                     return 0
 
 class VideoSourceCalibrationConfig:
