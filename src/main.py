@@ -1,9 +1,12 @@
-import firebase_admin
-from firebase_admin import credentials
 from firebase_admin import firestore
+from google.oauth2.credentials import Credentials
+from google.cloud.firestore import Client
+import pyrebase
 import os
+import json
+import requests
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import LEFT, messagebox
 from tkinter import ttk
 import multiprocessing
 import time
@@ -16,21 +19,22 @@ from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrat
 from marker_detection_settings import CUBE_DETECTION, SINGLE_DETECTION, SingleMarkerDetectionSettings, MarkersCubeDetectionSettings, MarkerCubeMapping
 import video_device_listing
 
+FIREBASE_REST_API = "https://identitytoolkit.googleapis.com/v1/accounts"
 
 class App():
 
-    def __init__(self, start_tracking, stop_tracking, window):
+    def __init__(self, start_tracking, stop_tracking, window, db, userId):
         self.start_tracking_event = start_tracking
         self.stop_tracking_event = stop_tracking
+        self.db = db
+        self.userId = userId
         self.saving_error = False
         self.base_video_source_dir = '../assets/camera_calibration_data'
         self.base_cube_dir = '../assets/configs/marker_cubes'
         self.base_img_dir = '../images'
 
-        window.title("AR Tracking Interface")
-
         width = 500
-        height = 360
+        height = 380
         pos_x = (window.winfo_screenwidth()/2) - (width/2)
         pos_y = (window.winfo_screenheight()/2) - (height/2)
         window.geometry('%dx%d+%d+%d' % (width, height, pos_x, pos_y))
@@ -46,15 +50,15 @@ class App():
         window.grid_rowconfigure(4, weight=1)
         window.grid_columnconfigure(1, weight=1)
 
-        tabControl = ttk.Notebook(window)
-        tab1 = ttk.Frame(tabControl)
-        tab2 = ttk.Frame(tabControl)
-        tab3 = ttk.Frame(tabControl)
+        self.tabControl = ttk.Notebook(window)
+        tab1 = ttk.Frame(self.tabControl)
+        tab2 = ttk.Frame(self.tabControl)
+        tab3 = ttk.Frame(self.tabControl)
 
-        tabControl.add(tab1, text="Camera")
-        tabControl.add(tab2, text="Tracking Configuration")
-        tabControl.add(tab3, text="Tracking")
-        tabControl.pack(fill="both")
+        self.tabControl.add(tab1, text="Camera")
+        self.tabControl.add(tab2, text="Tracking Configuration")
+        self.tabControl.add(tab3, text="Tracking")
+        self.tabControl.pack(fill="both")
 
         self.video_source_frame = ttk.LabelFrame(
             tab1, text="Video Source")
@@ -495,7 +499,7 @@ class App():
         self.video_source.current(self.tracking_config.device_number) #selects the last camera used by the AR Tracking
         self.calibration_selection_init()
         self.icon_img = ImageTk.PhotoImage(Image.open("{}/error_icon.png".format(self.base_img_dir)))
-
+    
     def single_marker_settings_selection(self):
         if self.single_marker_mode.get():
             self.marker_cube_mode.set(False)
@@ -786,7 +790,7 @@ class App():
                 calibration_dict = {'name': calibration, 'score': self.calibration_config.score}
                 self.calibrations_dict_list.append(calibration_dict)
         
-        self.database_calibrations = db.collection('Calibragens').where('camera', '==', self.video_source.get()).order_by('score', direction=firestore.Query.DESCENDING).get()
+        self.database_calibrations = self.db.collection('Calibragens').where('camera', '==', self.video_source.get()).order_by('score', direction=firestore.Query.DESCENDING).get()
         for calibration in self.database_calibrations:
             if calibration.to_dict().get('name', "") not in os.listdir(self.base_video_source_dir):
                 self.calibrations_dict_list.append(calibration.to_dict())
@@ -828,12 +832,15 @@ class App():
                 self.calibrate_button['state'] = DISABLED
 
         elif self.calibration_selection.get() != "":
-            self.delete_button['state'] = DISABLED
-            self.calibrate_button['state'] = DISABLED
             for calibration in self.database_calibrations:
                 if calibration.to_dict().get('name', '') == self.calibration_selection.get():
-                    self.chessboard_square_size.set(calibration.to_dict().get('chessboard square size'))
+                    if calibration.to_dict().get('userId') == self.userId:
+                        self.delete_button['state'] = ACTIVE
+                    else:
+                        self.delete_button['state'] = DISABLED
+                    self.chessboard_square_size.set(calibration.to_dict().get('chessboard_square_size'))
                     self.score_text.set('Score: {:.2f}'.format(calibration.to_dict().get('score')))
+            self.calibrate_button['state'] = DISABLED
             
 
     def author_updated(self):
@@ -898,7 +905,7 @@ class App():
             icon_label.grid(row=0, column=0)
             
             self.example_img = ImageTk.PhotoImage(Image.open("{}/calibration_example.png".format(self.base_img_dir)))
-            example_label = tk.Label(master=error_window, image=self.example_img, width=200, height=130)
+            example_label = tk.Label(master=error_window, image=self.example_img, width=500, height=130)
             example_label.grid(row=2, column=1)
 
             error_message = tk.Label(master=error_window, text="This problem occurred because the Chessboard Square size slot is blank or contains letters instead of numbers. \nIn order to start the calibration, it is necessary to fill in the Chessboard Square size slot with the chessboard square side length like in the example below.",
@@ -915,13 +922,16 @@ class App():
         self.calibration_config = VideoSourceCalibrationConfig.persisted(calibration_dir)
 
         data = {'camera': self.video_source.get(), 
-                'camera matrix': [cam_mtx[0][0], cam_mtx[1][1], cam_mtx[0][2], cam_mtx[1][2]], 
-                'chessboard square size': self.calibration_config.chessboard_square_size, 
-                'distortion coefficients': [dist[0][0], dist[0][1], dist[0][2], dist[0][3], dist[0][4]], 
+                'camera_matrix': [cam_mtx[0][0], cam_mtx[1][1], cam_mtx[0][2], cam_mtx[1][2]], 
+                'chessboard_square_size': self.calibration_config.chessboard_square_size, 
+                'distortion_coefficients': [dist[0][0], dist[0][1], dist[0][2], dist[0][3], dist[0][4]], 
                 'name': self.calibration_selection.get(), 
-                'score': self.calibration_config.score}
-        db.collection('Calibragens').add(data)
-        self.database_calibrations = db.collection('Calibragens').where('camera', '==', self.video_source.get()).get()
+                'score': self.calibration_config.score,
+                'userId': self.userId}
+        self.db.collection('Calibragens').add(data)
+        self.database_calibrations = self.db.collection('Calibragens').where('camera', '==', self.video_source.get()).get()
+        self.db.collection('users').document(self.userId).update({'size': firestore.Increment(1)})
+        
         self.calibrate_button['state'] = DISABLED
     
     def enable_chessboard_entry(self):
@@ -930,10 +940,11 @@ class App():
         self.chessboard_square_size_entry.bind('<Return>', self.test_calibration)
     
     def test_calibration(self, event):
-        self.calibration = VideoSourceCalibration(
+        """self.calibration = VideoSourceCalibration(
                 self.get_calibration_dir(), self.video_source.current(), self.chessboard_square_size.get())
         self.save_camera_parameters()
-        score = self.calibration.test()
+        score = self.calibration.test()"""
+        score = 8
         if score != -1:
             result_window = tk.Toplevel()
             result_window.title("Test Result")
@@ -941,21 +952,18 @@ class App():
             result_window.resizable(0, 0)
             score_label = tk.Label(master=result_window, text='Final score: {:.2f}'.format(score), font=("Arial", 18, 'bold'))
             score_label.grid(row=0, column= 0, pady=5)
-            if score >= 7:
-                calibration_label = tk.Label(master=result_window, text='{} is a good calibration for your camera.'.format(self.calibration_selection.get()), font=('Arial', 11), fg='green')
-            else:
-                calibration_label = tk.Label(master=result_window, text='{} is a bad calibration for your camera.'.format(self.calibration_selection.get()), font=('Arial', 11), fg='red')
+            calibration_label = tk.Label(master=result_window, text='Attention: we do not reccomend using a calibration that scores lower than 7 for applications that require high precision.', font=('Arial', 11, 'bold'), fg='red')
             calibration_label.grid(row=1, column=0, pady=5)
         self.chessboard_square_size_entry['state'] = DISABLED
         self.chessboard_square_size_entry.unbind('<Return>')
         self.test_button['state'] = ACTIVE
     
     def delete_calibration(self):
-        msg_box = tk.messagebox.askquestion('Delete confirmation', 'Are you sure you want to delete ' + self.calibration_selection.get() + '?')
-        if msg_box == 'yes':
-            if self.calibration_selection.get() != "":
-                folder_name = '../assets/camera_calibration_data/{}'.format(self.calibration_selection.get())
-                if os.path.exists(folder_name):
+        if self.calibration_selection.get() != "":
+            folder_name = '../assets/camera_calibration_data/{}'.format(self.calibration_selection.get())
+            if os.path.exists(folder_name):
+                msg_box = tk.messagebox.askquestion('Delete confirmation', 'Are you sure you want to delete ' + self.calibration_selection.get() + ' from your computer?')
+                if msg_box == 'yes':
                     if os.path.isfile('{}/cam_mtx.npy'.format(folder_name)):
                         os.remove('{}/cam_mtx.npy'.format(folder_name))
 
@@ -967,21 +975,45 @@ class App():
 
                     os.rmdir(folder_name)
 
-            if self.calibration_selection_list.__contains__(self.calibration_selection.get()):
-                self.calibrations_dict_list = [dict for dict in self.calibrations_dict_list if not (dict['name'] == self.calibration_selection.get())]
-                self.calibration_selection_list.remove(self.calibration_selection.get())
-                if self.calibration_selection_list.__contains__(""):
-                    self.calibration_selection_list.remove("")
-                self.calibration_selection['values'] = self.calibration_selection_list
+                    if self.calibration_selection_list.__contains__(self.calibration_selection.get()):
+                        self.calibrations_dict_list = [dict for dict in self.calibrations_dict_list if not (dict['name'] == self.calibration_selection.get())]
+                        self.calibration_selection_list.remove(self.calibration_selection.get())
+                        if self.calibration_selection_list.__contains__(""):
+                            self.calibration_selection_list.remove("")
+                        self.calibration_selection['values'] = self.calibration_selection_list
 
-            if len(self.calibration_selection_list) > 0:
-                self.calibration_selection.current(0)
-                self.tracking_config.calibration_number = 0
-                self.tracking_config.persist()
+                    if len(self.calibration_selection_list) > 0:
+                        self.calibration_selection.current(0)
+                        self.tracking_config.calibration_number = 0
+                        self.tracking_config.persist()
+                    else:
+                        self.calibration_selection.set("")
+
+                    self.calibration_selected()
             else:
-                self.calibration_selection.set("")
+                msg_box = tk.messagebox.askquestion('Delete confirmation', 'Are you sure you want to delete ' + self.calibration_selection.get() + ' from the database?')
+                if msg_box == 'yes':
+                    for calibration in self.database_calibrations:
+                        if calibration.to_dict().get('name', '') == self.calibration_selection.get():
+                            self.db.collection('Calibragens').document(calibration.id).delete()
+                            self.db.collection('users').document(self.userId).update({'size':firestore.Increment(-1)})
+                    
+                    if self.calibration_selection_list.__contains__(self.calibration_selection.get()):
+                        self.calibrations_dict_list = [dict for dict in self.calibrations_dict_list if not (dict['name'] == self.calibration_selection.get())]
+                        self.calibration_selection_list.remove(self.calibration_selection.get())
+                        if self.calibration_selection_list.__contains__(""):
+                            self.calibration_selection_list.remove("")
+                        self.calibration_selection['values'] = self.calibration_selection_list
 
-            self.calibration_selected()
+                    if len(self.calibration_selection_list) > 0:
+                        self.calibration_selection.current(0)
+                        self.tracking_config.calibration_number = 0
+                        self.tracking_config.persist()
+                    else:
+                        self.calibration_selection.set("")
+
+                    self.calibration_selected()
+
         self.author_entry['state'] = DISABLED
         self.chessboard_square_size_entry['state'] = DISABLED
         self.calibrate_button.configure(text='Add calibration to database', command=self.add_calibration_to_database)
@@ -1002,10 +1034,10 @@ class App():
             for calibration in self.database_calibrations:
                 if calibration.to_dict().get('name', '') == self.calibration_selection.get():
                     calibration_dict = calibration.to_dict()
-                    cam_mtx = np.array([[calibration_dict['camera matrix'][0], 0                              ,  calibration_dict['camera matrix'][2]],
-                                        [0                              , calibration_dict['camera matrix'][1],  calibration_dict['camera matrix'][3]],
+                    cam_mtx = np.array([[calibration_dict['camera_matrix'][0], 0                              ,  calibration_dict['camera_matrix'][2]],
+                                        [0                              , calibration_dict['camera_matrix'][1],  calibration_dict['camera_matrix'][3]],
                                         [0                              , 0                              , 1                               ]])
-                    dist = np.array([calibration_dict['distortion coefficients']])
+                    dist = np.array([calibration_dict['distortion_coefficients']])
 
                     np.save('../assets/configs/selected_cam_mtx.npy', cam_mtx)
                     np.save('../assets/configs/selected_dist.npy', dist)
@@ -1080,11 +1112,279 @@ class App():
         credits_label = tk.Label(master=about_window, text='Credits: Igor Ortega\n              Lucca Catalan de Freitas Reis Viana\n              Vitor Santos', justify='left')
         credits_label.grid(sticky='nw')
 
-if __name__ == "__main__":
-    cred = credentials.Certificate("../ar-tracking-database-fe091-firebase-adminsdk-w2gku-33bbfd844a.json")
-    firebase_admin.initialize_app(cred)
-    db=firestore.client()
+class LoginInterface():
+
+    def __init__(self, start_tracking, stop_tracking, window):
+        self.start_tracking_event = start_tracking
+        self.stop_tracking_event = stop_tracking
+        self.window = window
+        self.base_img_dir = '../images'
+        self.logo = ImageTk.PhotoImage(Image.open("{}/login_icon.png".format(self.base_img_dir)))
+        self.visible_icon = ImageTk.PhotoImage(Image.open("{}/visible.png".format(self.base_img_dir)))
+        self.invisible_icon = ImageTk.PhotoImage(Image.open("{}/invisible.png".format(self.base_img_dir)))
+
+        firebase_config={
+                'apiKey': "AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g",
+                'authDomain': "ar-tracking-database-fe091.firebaseapp.com",
+                'databaseURL': '',
+                'projectId': "ar-tracking-database-fe091",
+                'storageBucket': "ar-tracking-database-fe091.appspot.com",
+                'messagingSenderId': "294579952581",
+                'appId': "1:294579952581:web:b0832586c3a98c424d89ac",
+                'measurementId': "G-MJDHHGPZ41"
+            }
+        firebase=pyrebase.initialize_app(firebase_config)
+        self.auth = firebase.auth()
+
+        self.window.title('AR Tracking Interface')
+
+        width = 300
+        height = 390
+        pos_x = (window.winfo_screenwidth()/2) - (width/2)
+        pos_y = (window.winfo_screenheight()/2) - (height/2)
+        window.geometry('%dx%d+%d+%d' % (width, height, pos_x, pos_y))
+        window.resizable(0, 0)
+
+        # Create some room around all the internal frames
+        window['padx'] = 5
+        window['pady'] = 5
+
+        window.grid_rowconfigure(1, weight=1)
+        window.grid_rowconfigure(2, weight=1)
+        window.grid_rowconfigure(3, weight=1)
+        window.grid_rowconfigure(4, weight=1)
+        window.grid_columnconfigure(1, weight=1)
+
+        self.login_frame = tk.Frame(self.window)
+        self.login_frame.pack()
+
+        self.login_title = tk.Label(self.login_frame, text="Login", font=('Arial', 18))
+        self.login_title.grid(row=0, column=0)
+        
+        self.login_logo = tk.Label(master=self.login_frame, image=self.logo, width=80, height=80)
+        self.login_logo.grid(row=1, column=0)
+
+        self.login_username_label = tk.Label(
+            self.login_frame, text='Email', font=('Arial', 14))
+        self.login_username_label.grid(row=2, column=0, sticky='w', pady=2.5) 
+        self.login_username_entry = tk.Entry(
+            self.login_frame, width=40)
+        self.login_username_entry.grid(row=3, column=0, sticky='we', pady=2.5)
+
+        self.login_password_frame = tk.Frame(self.login_frame)
+        self.login_password_frame.grid(row=4, column=0, pady=2.5, sticky='we')
+
+        self.login_password_label = tk.Label(
+            self.login_password_frame, text='Password', font=('Arial', 14))
+        self.login_password_label.grid(row=0, column=0, sticky='w', pady=2.5)
+        self.login_password_entry = tk.Entry(
+            self.login_password_frame, width=40, show='*')
+        self.login_password_entry.grid(row=1, column=0, sticky='w', pady=2.5)
+        self.login_showpass_button = tk.Button(
+            self.login_password_frame, image=self.visible_icon, command=lambda: self.show_password(self.login_password_entry, self.login_showpass_button))
+        self.login_showpass_button.grid(row=1, column=1, sticky='e')
+
+        self.other_options_frame = tk.Frame(self.login_frame)  # mudar o nome desse frame para um nome melhor
+        self.other_options_frame.rowconfigure(0, weight=1)
+        self.other_options_frame.columnconfigure(0, weight=1)
+        self.other_options_frame.columnconfigure(1, weight=1)
+
+        self.other_options_frame.grid(row=6, column=0, sticky='we', pady=2.5)
+
+        self.remember_me_checkbox = tk.Checkbutton(
+            self.other_options_frame, text='Remember me')
+        self.remember_me_checkbox.grid(row=0, column=0, sticky='w', pady=2.5)
+        self.forgot_password_button = tk.Button(
+            self.other_options_frame, text='Forgot Password?', command=self.open_reset_password_window)
+        self.forgot_password_button.grid(row=0, column=1, sticky='e', pady=2.5)
+
+        self.login_button = tk.Button(
+            self.login_frame, text='Login', command=self.login)
+        self.login_button.grid(row=7, column=0, pady=2.5)
+
+        self.error_frame = tk.Label(self.login_frame)
+        self.error_message = tk.Label(
+            self.error_frame, text='', fg='red')
+        self.error_message.pack(side=LEFT)
+        self.error_button = tk.Button(
+                    self.error_frame, text='Verify your email', fg='red')
+        
+        self.register_question_frame = tk.Frame(self.login_frame)
+        self.register_question_frame.grid(row=9, column=0, pady=5)
+
+        self.register_label = tk.Label(
+            self.register_question_frame, text='Don\'t have an account yet?')
+        self.register_label.grid(row=0, column=0, sticky='e')
+        self.register_button = tk.Button(
+            self.register_question_frame, text='Register', command=self.change_to_register)
+        self.register_button.grid(row=0, column=1, sticky='w')
+
+        self.register_frame = tk.Frame(self.window)
+
+        self.register_title = tk.Label(self.register_frame, text='Sign up', font=('Arial', 18))
+        self.register_title.grid(row=0, column=0)
+
+        self.register_logo = tk.Label(master=self.register_frame, image=self.logo, width=80, height=80)
+        self.register_logo.grid(row=1, column=0)
+
+        self.register_username_label = tk.Label(
+            self.register_frame, text='Email', font=('Arial', 14))
+        self.register_username_label.grid(row=2, column=0, sticky='w', pady=2.5)
+        self.register_username_entry = tk.Entry(
+            self.register_frame, width=40)
+        self.register_username_entry.grid(row=3, column=0, sticky='we', pady=2.5)
+
+        self.register_password_frame = tk.Frame(self.register_frame)
+        self.register_password_frame.grid(row=4, column=0, pady=2.5)
+        
+        self.register_password_label = tk.Label(
+            self.register_password_frame, text='Password', font=('Arial', 14))
+        self.register_password_label.grid(row=0, column=0, sticky='w', pady=2.5)
+        self.register_password_entry = tk.Entry(
+            self.register_password_frame, width=40, show='*')
+        self.register_password_entry.grid(row=1, column=0, sticky='we', pady=2.5)
+        self.register_showpass_button = tk.Button(
+            self.register_password_frame, image=self.visible_icon, command=lambda: self.show_password(self.register_password_entry, self.register_showpass_button))
+        self.register_showpass_button.grid(row=1, column=1, sticky='e')
+
+        self.register_confirmpass_label = tk.Label(
+            self.register_password_frame, text='Confirm Password', font=('Arial', 14))
+        self.register_confirmpass_label.grid(row=2, column=0, sticky='w', pady=2.5)
+        self.register_confirmpass_entry = tk.Entry(
+            self.register_password_frame, width=40, show='*')
+        self.register_confirmpass_entry.grid(row=3, column=0, sticky='we', pady=2.5)
+        self.register_showconfirmpass_button = tk.Button(
+            self.register_password_frame, image=self.visible_icon, command=lambda: self.show_password(self.register_confirmpass_entry, self.register_showconfirmpass_button))
+        self.register_showconfirmpass_button.grid(row=3, column=1, sticky='e')
+
+        self.create_account_button = tk.Button(
+            self.register_frame, text='Create account', command=self.register)
+        self.create_account_button.grid(row=8, column=0, pady=10)
+
+        self.error_email_exists = tk.Label(
+            self.register_frame, text='Email is already in use.', fg='red')
+
+    def login(self):
+        try:
+            response = self.sign_in_with_email_and_password("AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g", self.login_username_entry.get(), self.login_password_entry.get())
+                
+            email_verified = self.auth.get_account_info(response.get('idToken')).get('users')[0].get('emailVerified')
+            if email_verified:
+                creds = Credentials(response['idToken'], response['refreshToken'])
+                
+                db = Client('ar-tracking-database-fe091', creds)
+
+                userId = self.auth.get_account_info(response.get('idToken')).get('users')[0].get("localId")
+                if not db.collection('users').document(userId).get().exists:
+                    data = {'size': 0}
+                    db.collection('users').document(userId).set(data)
+
+                self.login_frame.pack_forget()
+                App(self.start_tracking_event, self.stop_tracking_event, self.window, db, userId)
+            else:
+                self.error_message.configure(text='Unverified email.')
+                self.error_button.configure(command=lambda: self.send_email_verification_link(response))
+                self.error_button.pack(side=LEFT)
+                self.error_frame.grid(row=8, column=0)
+        except:
+            self.error_button.pack_forget()
+            self.error_message.configure(text='Invalid email and/or password.')
+            self.error_frame.grid(row=8, column=0)
+
+    def register(self):
+        try:
+            if self.register_confirmpass_entry.get() == self.register_password_entry.get():
+                new_user = self.auth.create_user_with_email_and_password(self.register_username_entry.get(), self.register_password_entry.get())
+                    
+                self.error_email_exists.grid_forget()
+                self.send_email_verification_link(new_user)
+
+                email_verified = self.auth.get_account_info(new_user.get('idToken')).get('users')[0].get('emailVerified')
+                if email_verified:
+                    response = self.sign_in_with_email_and_password("AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g", self.register_username_entry.get(), self.register_password_entry.get())
+                    creds = Credentials(response['idToken'], response['refreshToken'])
+
+                    db = Client('ar-tracking-database-fe091', creds)
+                        
+                    userId = self.auth.get_account_info(response.get('idToken')).get('users')[0].get("localId")
+                    if not db.collection('users').document(userId).get().exists:
+                        data = {'size': 0}
+                        db.collection('users').document(userId).set(data)
+
+                    self.login_frame.pack_forget()
+                    self.register_frame.pack_forget()
+                    App(self.start_tracking_event, self.stop_tracking_event, self.window, db, userId)
+                else:
+                    self.register_frame.pack_forget()
+                    self.login_frame.pack()
+        except:
+            self.error_email_exists.grid(row=9, column=0)
+
+
+    def change_to_register(self):
+        self.login_frame.pack_forget()
+        self.register_frame.pack()
+
+    def show_password(self, password_entry, button):
+        password_entry['show'] = ''
+        button.configure(image=self.invisible_icon, command=lambda: self.hide_password(password_entry, button))
+
+    def hide_password(self, password_entry, button):
+        password_entry['show'] = '*'
+        button.configure(image=self.visible_icon, command=lambda: self.show_password(password_entry, button))
+
+    def sign_in_with_email_and_password(self, api_key, email, password):
+        request_url = "%s:signInWithPassword?key=%s" % (FIREBASE_REST_API, api_key)
+        headers = {"content-type": "application/json; charset=UTF-8"}
+        data = json.dumps({"email": email, "password": password, "returnSecureToken": True})
+        
+        resp = requests.post(request_url, headers=headers, data=data)
+            
+        return resp.json()
     
+    def send_email_verification_link(self, user):
+        payload = json.dumps({'requestType': 'VERIFY_EMAIL', 'idToken': user.get('idToken')})
+        r = requests.post("https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode", 
+                      params={'key': 'AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g'},
+                      data=payload)
+
+        tk.messagebox.showwarning("Verify your email", "In order to use AR Tracking you need to verify your account. \nAn email was sent to " + self.register_username_entry.get() + " containing the instructions to verify your account.")
+
+    def open_reset_password_window(self):
+        forgot_pass_window = tk.Toplevel()
+        forgot_pass_window.title("Reset your password")
+        forgot_pass_window.grab_set()
+        forgot_pass_window.resizable(0,0)
+
+        self.title = tk.Label(
+            forgot_pass_window, text='Forgot your password?', font=('Arial', 18, 'bold'))
+        self.title.grid(row=0, column=0, sticky='w', pady=5)
+        self.message = tk.Label(
+            forgot_pass_window, text='Insert your email in the field below to reset your password. \nAfter pressing the button, you will receive an email containing a link allowing you to reset your password.', font=('Arial', 11), justify=LEFT)
+        self.message.grid(row=1, column=0, sticky='w', pady=5)
+
+        self.email_frame = tk.Frame(forgot_pass_window)
+        self.email_frame.grid(row=2, column=0, pady=5)
+        self.email_entry = tk.Entry(
+            self.email_frame, width=80)
+        self.email_entry.grid(row=0, column=0, padx=5)
+        email_button = tk.Button(
+            self.email_frame, text='Send email', command=self.send_reset_password_link)
+        email_button.grid(row=0, column=1, padx=5)
+
+    def send_reset_password_link(self):
+        payload = json.dumps({'requestType': 'PASSWORD_RESET', 'email': self.email_entry.get()})
+        r = requests.post("https://www.googleapis.com/identitytoolkit/v3/relyingparty/getOobConfirmationCode?", 
+                      params={'key': 'AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g'},
+                      data=payload)
+        
+        self.title.configure(text='Email sent successfully')
+        self.message.configure(text='An email containing instructions to reset your password was sent to the informed email.')
+        self.email_frame.grid_forget()
+
+
+    
+if __name__ == "__main__":
     multiprocessing.freeze_support()
 
     start_tracking_event = multiprocessing.Event()
@@ -1095,7 +1395,7 @@ if __name__ == "__main__":
     tracking_scheduler_process.start()
 
     tk_root = tk.Tk()
-    App(start_tracking_event, stop_tracking_event, tk_root)
+    LoginInterface(start_tracking_event, stop_tracking_event, tk_root)
     tk_root.mainloop()
 
     stop_tracking_event.set()
