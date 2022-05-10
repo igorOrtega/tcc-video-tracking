@@ -18,6 +18,7 @@ from tracking import TrackingScheduler, TrackingCofig
 from video_source_calibration import VideoSourceCalibration, VideoSourceCalibrationConfig
 from marker_detection_settings import CUBE_DETECTION, SINGLE_DETECTION, SingleMarkerDetectionSettings, MarkersCubeDetectionSettings, MarkerCubeMapping
 import video_device_listing
+import webbrowser
 
 FIREBASE_REST_API = "https://identitytoolkit.googleapis.com/v1/accounts"
 
@@ -484,13 +485,6 @@ class App():
             self.publishing_config_frame, text="Start Tracking", command=self.start_tracking)
         self.tracking_button.grid(row=6, column=1, sticky=tk.N, pady=5)
 
-        self.menu_bar = tk.Menu(window)
-        self.menu_help = tk.Menu(self.menu_bar, tearoff=0)
-        self.menu_help.add_command(label="About", command=self.create_about_window)
-        self.menu_bar.add_cascade(label="Help", menu=self.menu_help)
-
-        window.config(menu=self.menu_bar)
-
         self.calibration = None
         self.cube_ids = []
         self.cube_ids_init()
@@ -542,6 +536,9 @@ class App():
 
             error_window.columnconfigure([0, 1], minsize=50, weight=1)
             error_window.rowconfigure([0, 1], minsize=50, weight=1)
+
+            geometry_string = self.center_window(error_window, window_height=280, window_width=1100)
+            error_window.geometry(geometry_string)
             
             error_title = tk.Label(master=error_window, text="Insufficient data to save marker ID and length", fg="blue", font=("Arial", 18))
             error_title.grid(row=0, column=1, sticky="w")
@@ -556,6 +553,8 @@ class App():
             error_message = tk.Label(master=error_window, text="To save the marker it is necessary to fill in both Marker ID and Marker length slots. \nIn order to solve this problem, fill in the Marker ID slot with the marker ID and fill in the Marker length slot with the marker side length like in the example bellow.",
                                     justify="left", font=("Arial", 11),)
             error_message.grid(row=1, column=1)
+
+
 
     def marker_cube_settings_selection(self):
         if self.marker_cube_mode.get():
@@ -651,6 +650,9 @@ class App():
 
             error_window.columnconfigure([0, 1], minsize=50, weight=1)
             error_window.rowconfigure([0, 1], minsize=50, weight=1)
+
+            geometry_string = self.center_window(error_window, window_height=350, window_width=1100)
+            error_window.geometry(geometry_string)
             
             error_title = tk.Label(master=error_window, text="Insufficient data to start cube mapping", fg="blue", font=("Arial", 18))
             error_title.grid(row=0, column=1, sticky="w")
@@ -717,6 +719,9 @@ class App():
 
             error_window.columnconfigure([0, 1], minsize=50, weight=1)
             error_window.rowconfigure([0, 1], minsize=50, weight=1)
+
+            geometry_string = self.center_window(error_window, window_height=220, window_width=1100)
+            error_window.geometry(geometry_string)
             
             error_title = tk.Label(master=error_window, text="IP Address is incorrect", fg="blue", font=("Arial", 18))
             error_title.grid(row=0, column=1, sticky="w")
@@ -739,6 +744,9 @@ class App():
 
             error_window.columnconfigure([0, 1], minsize=50, weight=1)
             error_window.rowconfigure([0, 1], minsize=50, weight=1)
+
+            geometry_string = self.center_window(error_window, window_height=180, window_width=700)
+            error_window.geometry(geometry_string)
             
             error_title = tk.Label(master=error_window, text="Port is incorrect", fg="blue", font=("Arial", 18))
             error_title.grid(row=0, column=1, sticky="w")
@@ -761,6 +769,9 @@ class App():
 
             error_window.columnconfigure([0, 1], minsize=50, weight=1)
             error_window.rowconfigure([0, 1], minsize=50, weight=1)
+
+            geometry_string = self.center_window(error_window, window_height=180, window_width=800)
+            error_window.geometry(geometry_string)
 
             error_title = tk.Label(master=error_window, text="Translation Offset slots are blank", fg="blue", font=("Arial", 18))
             error_title.grid(row=0, column=1, sticky="w")
@@ -790,7 +801,7 @@ class App():
                 calibration_dict = {'name': calibration, 'score': self.calibration_config.score}
                 self.calibrations_dict_list.append(calibration_dict)
         
-        self.database_calibrations = self.db.collection('Calibragens').where('camera', '==', self.video_source.get()).order_by('score', direction=firestore.Query.DESCENDING).get()
+        self.database_calibrations = self.db.collection('calibrations').where('camera', '==', self.video_source.get()).order_by('score', direction=firestore.Query.DESCENDING).get()
         for calibration in self.database_calibrations:
             if calibration.to_dict().get('name', "") not in os.listdir(self.base_video_source_dir):
                 self.calibrations_dict_list.append(calibration.to_dict())
@@ -850,7 +861,6 @@ class App():
         if self.calibration_selection_list.__contains__(""):
             self.calibration_selection_list.remove("")
 
-        self.calibration_selection.current(len(self.calibration_selection_list) - 1)
         self.calibration_selection.set('{}-{}-{}'.format(self.video_source.get(), len(self.database_calibrations), self.author.get()))
         self.author_entry['state'] = 'normal'
         self.chessboard_square_size_entry['state'] = ACTIVE
@@ -898,6 +908,9 @@ class App():
             error_window.columnconfigure([0, 1], minsize=50, weight=1)
             error_window.rowconfigure([0, 1], minsize=50, weight=1)
 
+            geometry_string = self.center_window(error_window, window_height=270, window_width=1100)
+            error_window.geometry(geometry_string)
+
             error_title = tk.Label(master=error_window, text="Chessboard square size is incorrect", fg="blue", font=("Arial", 18))
             error_title.grid(row=0, column=1, sticky="w")
 
@@ -928,8 +941,8 @@ class App():
                 'name': self.calibration_selection.get(), 
                 'score': self.calibration_config.score,
                 'userId': self.userId}
-        self.db.collection('Calibragens').add(data)
-        self.database_calibrations = self.db.collection('Calibragens').where('camera', '==', self.video_source.get()).get()
+        self.db.collection('calibrations').add(data)
+        self.database_calibrations = self.db.collection('calibrations').where('camera', '==', self.video_source.get()).get()
         self.db.collection('users').document(self.userId).update({'size': firestore.Increment(1)})
         
         self.calibrate_button['state'] = DISABLED
@@ -940,11 +953,10 @@ class App():
         self.chessboard_square_size_entry.bind('<Return>', self.test_calibration)
     
     def test_calibration(self, event):
-        """self.calibration = VideoSourceCalibration(
+        self.calibration = VideoSourceCalibration(
                 self.get_calibration_dir(), self.video_source.current(), self.chessboard_square_size.get())
         self.save_camera_parameters()
-        score = self.calibration.test()"""
-        score = 8
+        score = self.calibration.test()
         if score != -1:
             result_window = tk.Toplevel()
             result_window.title("Test Result")
@@ -995,7 +1007,7 @@ class App():
                 if msg_box == 'yes':
                     for calibration in self.database_calibrations:
                         if calibration.to_dict().get('name', '') == self.calibration_selection.get():
-                            self.db.collection('Calibragens').document(calibration.id).delete()
+                            self.db.collection('calibrations').document(calibration.id).delete()
                             self.db.collection('users').document(self.userId).update({'size':firestore.Increment(-1)})
                     
                     if self.calibration_selection_list.__contains__(self.calibration_selection.get()):
@@ -1102,15 +1114,14 @@ class App():
         self.calibration_config.chessboard_square_size = self.chessboard_square_size.get()
         self.calibration_config.persist(self.get_calibration_dir(), calibration_score)
 
-    def create_about_window(self):
-        about_window = tk.Toplevel()
-        about_window.title("About")
-        about_window.grab_set()
-        about_window.resizable(0, 0)
-        version_label = tk.Label(master=about_window, text='Version: 0.00.0')
-        version_label.grid(sticky='nw')
-        credits_label = tk.Label(master=about_window, text='Credits: Igor Ortega\n              Lucca Catalan de Freitas Reis Viana\n              Vitor Santos', justify='left')
-        credits_label.grid(sticky='nw')
+    def center_window(self, window, window_height, window_width):
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
+
+        x_cordinate = int((screen_width/2) - (window_width/2))
+        y_cordinate = int((screen_height/2) - (window_height/2))
+
+        return "{}x{}+{}+{}".format(window_width, window_height, x_cordinate, y_cordinate)
 
 class LoginInterface():
 
@@ -1119,19 +1130,18 @@ class LoginInterface():
         self.stop_tracking_event = stop_tracking
         self.window = window
         self.base_img_dir = '../images'
-        self.logo = ImageTk.PhotoImage(Image.open("{}/login_icon.png".format(self.base_img_dir)))
+        self.logo = ImageTk.PhotoImage(Image.open("{}/interlab_logo_transparent.png".format(self.base_img_dir)))
         self.visible_icon = ImageTk.PhotoImage(Image.open("{}/visible.png".format(self.base_img_dir)))
         self.invisible_icon = ImageTk.PhotoImage(Image.open("{}/invisible.png".format(self.base_img_dir)))
 
         firebase_config={
-                'apiKey': "AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g",
-                'authDomain': "ar-tracking-database-fe091.firebaseapp.com",
+                'apiKey': "AIzaSyCJar67v1udral1xBr40o3JcfJK_Po-ohE",
+                'authDomain': "ar-tracking-database-479f3.firebaseapp.com",
                 'databaseURL': '',
-                'projectId': "ar-tracking-database-fe091",
-                'storageBucket': "ar-tracking-database-fe091.appspot.com",
-                'messagingSenderId': "294579952581",
-                'appId': "1:294579952581:web:b0832586c3a98c424d89ac",
-                'measurementId': "G-MJDHHGPZ41"
+                'projectId': "ar-tracking-database-479f3",
+                'storageBucket': "ar-tracking-database-479f3.appspot.com",
+                'messagingSenderId': "772321532641",
+                'appId': "1:772321532641:web:a53d5fa42dda057af2b5a0"
             }
         firebase=pyrebase.initialize_app(firebase_config)
         self.auth = firebase.auth()
@@ -1191,9 +1201,9 @@ class LoginInterface():
 
         self.other_options_frame.grid(row=6, column=0, sticky='we', pady=2.5)
 
-        self.remember_me_checkbox = tk.Checkbutton(
-            self.other_options_frame, text='Remember me')
-        self.remember_me_checkbox.grid(row=0, column=0, sticky='w', pady=2.5)
+        #self.remember_me_checkbox = tk.Checkbutton(
+        #    self.other_options_frame, text='Remember me')
+        #self.remember_me_checkbox.grid(row=0, column=0, sticky='w', pady=2.5)
         self.forgot_password_button = tk.Button(
             self.other_options_frame, text='Forgot Password?', command=self.open_reset_password_window)
         self.forgot_password_button.grid(row=0, column=1, sticky='e', pady=2.5)
@@ -1264,15 +1274,24 @@ class LoginInterface():
         self.error_email_exists = tk.Label(
             self.register_frame, text='Email is already in use.', fg='red')
 
+        self.menu_bar = tk.Menu(window)
+        self.menu_help = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_help.add_command(label='Manual', command=self.open_manual)
+        self.menu_help.add_command(label="About", command=self.create_about_window)
+        self.menu_bar.add_cascade(label="Help", menu=self.menu_help)
+
+        window.config(menu=self.menu_bar)
+
     def login(self):
         try:
-            response = self.sign_in_with_email_and_password("AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g", self.login_username_entry.get(), self.login_password_entry.get())
-                
+            response = self.sign_in_with_email_and_password("AIzaSyCJar67v1udral1xBr40o3JcfJK_Po-ohE", self.login_username_entry.get(), self.login_password_entry.get())
+
+            #print(response)        
             email_verified = self.auth.get_account_info(response.get('idToken')).get('users')[0].get('emailVerified')
             if email_verified:
                 creds = Credentials(response['idToken'], response['refreshToken'])
-                
-                db = Client('ar-tracking-database-fe091', creds)
+                    
+                db = Client('ar-tracking-database-479f3', creds)
 
                 userId = self.auth.get_account_info(response.get('idToken')).get('users')[0].get("localId")
                 if not db.collection('users').document(userId).get().exists:
@@ -1301,10 +1320,10 @@ class LoginInterface():
 
                 email_verified = self.auth.get_account_info(new_user.get('idToken')).get('users')[0].get('emailVerified')
                 if email_verified:
-                    response = self.sign_in_with_email_and_password("AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g", self.register_username_entry.get(), self.register_password_entry.get())
+                    response = self.sign_in_with_email_and_password("AIzaSyCJar67v1udral1xBr40o3JcfJK_Po-ohE", self.register_username_entry.get(), self.register_password_entry.get())
                     creds = Credentials(response['idToken'], response['refreshToken'])
 
-                    db = Client('ar-tracking-database-fe091', creds)
+                    db = Client('ar-tracking-database-479f3', creds)
                         
                     userId = self.auth.get_account_info(response.get('idToken')).get('users')[0].get("localId")
                     if not db.collection('users').document(userId).get().exists:
@@ -1345,7 +1364,7 @@ class LoginInterface():
     def send_email_verification_link(self, user):
         payload = json.dumps({'requestType': 'VERIFY_EMAIL', 'idToken': user.get('idToken')})
         r = requests.post("https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode", 
-                      params={'key': 'AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g'},
+                      params={'key': 'AIzaSyCJar67v1udral1xBr40o3JcfJK_Po-ohE'},
                       data=payload)
 
         tk.messagebox.showwarning("Verify your email", "In order to use AR Tracking you need to verify your account. \nAn email was sent to " + self.register_username_entry.get() + " containing the instructions to verify your account.")
@@ -1375,12 +1394,36 @@ class LoginInterface():
     def send_reset_password_link(self):
         payload = json.dumps({'requestType': 'PASSWORD_RESET', 'email': self.email_entry.get()})
         r = requests.post("https://www.googleapis.com/identitytoolkit/v3/relyingparty/getOobConfirmationCode?", 
-                      params={'key': 'AIzaSyAZAs5Mgt_YgQ5NlYNLk_L141-EI6nEQ1g'},
+                      params={'key': 'AIzaSyCJar67v1udral1xBr40o3JcfJK_Po-ohE'},
                       data=payload)
         
         self.title.configure(text='Email sent successfully')
         self.message.configure(text='An email containing instructions to reset your password was sent to the informed email.')
         self.email_frame.grid_forget()
+
+    def open_manual(self):
+        webbrowser.open_new('https://docs.google.com/document/d/183dZg2_0UBD8IP1P4XLX4uSmWgOMQhZjNsOYzaSrt_M/edit')
+
+    def create_about_window(self):
+        about_window = tk.Toplevel()
+        about_window.title("About")
+        about_window.grab_set()
+        about_window.resizable(0, 0)
+        version_label = tk.Label(master=about_window, text='Version: 0.00.0')
+        version_label.grid(sticky='nw')
+        credits_label = tk.Label(master=about_window, text='Credits: Igor Ortega\n              Lucca Catalan de Freitas Reis Viana\n              Vitor Santos', justify='left')
+        credits_label.grid(sticky='nw')
+
+        window_height = 80
+        window_width = 250
+
+        screen_width = about_window.winfo_screenwidth()
+        screen_height = about_window.winfo_screenheight()
+
+        x_cordinate = int((screen_width/2) - (window_width/2))
+        y_cordinate = int((screen_height/2) - (window_height/2))
+
+        about_window.geometry("{}x{}+{}+{}".format(window_width, window_height, x_cordinate, y_cordinate))
 
 
     
